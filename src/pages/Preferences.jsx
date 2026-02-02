@@ -1,9 +1,14 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../supabaseClient";
 import { useNavigate } from "react-router-dom";
-import "../styles/Perferences.css";
+import "../styles/Perferences.css"; // Using the same base styles for consistency
 
-const ALL_CATEGORIES = ["tech", "sports", "movies", "geopolitics"];
+const ALL_CATEGORIES = [
+  { id: "tech", label: "Technology", icon: "💻" },
+  { id: "sports", label: "Sports", icon: "🏀" },
+  { id: "movies", label: "Movies", icon: "🎬" },
+  { id: "geopolitics", label: "Geopolitics", icon: "🌍" },
+];
 
 function Preferences() {
   const navigate = useNavigate();
@@ -18,15 +23,11 @@ function Preferences() {
 
   const loadPreferences = async () => {
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
+      const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         setLoading(false);
         return;
       }
-
       const { data, error } = await supabase
         .from("preferences")
         .select("category")
@@ -42,22 +43,18 @@ function Preferences() {
     }
   };
 
-  const toggleCategory = (category) => {
+  const toggleCategory = (categoryId) => {
     setSelected((prev) =>
-      prev.includes(category)
-        ? prev.filter((c) => c !== category)
-        : [...prev, category]
+      prev.includes(categoryId)
+        ? prev.filter((c) => c !== categoryId)
+        : [...prev, categoryId]
     );
   };
 
   const savePreferences = async () => {
     setSaving(true);
     setStatus("");
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
+    const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
     await supabase.from("preferences").delete().eq("user_id", user.id);
@@ -70,54 +67,50 @@ function Preferences() {
         }))
       );
     }
-
     setSaving(false);
-    setStatus("Preferences saved successfully!");
+    setStatus("Preferences saved!");
+    setTimeout(() => setStatus(""), 3000);
   };
 
-  const logout = async () => {
-    await supabase.auth.signOut();
-    navigate("/login");
-  };
-
-  if (loading) {
-    return <p style={{ textAlign: "center" }}>Loading preferences...</p>;
-  }
+  if (loading) return (
+    <div className="signup-page">
+      <div className="loader"></div>
+    </div>
+  );
 
   return (
-    <div className="preferences-container">
-      <div className="preferences-card">
-        <h2>Select Your Interests</h2>
-        <p className="preferences-subtitle">
-          You’ll receive a personalized news email every hour.
-        </p>
+    <div className="signup-page">
+      <div className="blob blob-1"></div>
+      <div className="blob blob-2"></div>
 
-        <div className="category-list">
-          {ALL_CATEGORIES.map((category) => (
-            <label key={category} className="category-item">
-              <input
-                type="checkbox"
-                checked={selected.includes(category)}
-                onChange={() => toggleCategory(category)}
-              />
-              {category.toUpperCase()}
-            </label>
-          ))}
+      <div className="card-wrapper">
+        <div className="glass-card">
+          <h2 className="title">Your Interests</h2>
+          <p className="subtitle">Pick what you want in your hourly digest.</p>
+
+          <div className="category-grid">
+            {ALL_CATEGORIES.map((cat) => (
+              <div
+                key={cat.id}
+                className={`category-chip ${selected.includes(cat.id) ? "active" : ""}`}
+                onClick={() => toggleCategory(cat.id)}
+              >
+                <span className="chip-icon">{cat.icon}</span>
+                <span className="chip-label">{cat.label}</span>
+              </div>
+            ))}
+          </div>
+
+          {status && <p className="success-message">{status}</p>}
+
+          <button className="submit-btn" onClick={savePreferences} disabled={saving}>
+            {saving ? <span className="loader"></span> : "Update Preferences"}
+          </button>
+
+          <button className="secondary-btn" onClick={() => supabase.auth.signOut().then(() => navigate("/login"))}>
+            Logout
+          </button>
         </div>
-
-        <button
-          className="preferences-button"
-          onClick={savePreferences}
-          disabled={saving}
-        >
-          {saving ? "Saving..." : "Save Preferences"}
-        </button>
-
-        {status && <p className="status-text">{status}</p>}
-
-        <button className="logout-button" onClick={logout}>
-          Logout
-        </button>
       </div>
     </div>
   );

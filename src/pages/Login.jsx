@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { supabase } from "../supabaseClient";
 import { useNavigate, Link } from "react-router-dom";
-import "../styles/Auth.css";
+import "../styles/Signup.css"; // Reuse the same CSS file for consistency
 
 function Login() {
   const navigate = useNavigate();
@@ -31,38 +31,54 @@ function Login() {
   };
 
   return (
-    <div className="auth-container">
-      <div className="auth-card">
-        <h2>Login</h2>
+    <div className="signup-page">
+      {/* Background decorative blobs */}
+      <div className="blob blob-1"></div>
+      <div className="blob blob-2"></div>
 
-        <form onSubmit={handleLogin}>
-          <input
-            className="auth-input"
-            type="email"
-            placeholder="Email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
+      <div className="card-wrapper">
+        <div className="glass-card">
+          <div className="card-content">
+            <h2 className="title">Welcome Back</h2>
+            <p className="subtitle">Enter your details to sign in</p>
 
-          <input
-            className="auth-input"
-            type="password"
-            placeholder="Password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
+            <form onSubmit={handleLogin} className="signup-form">
+              <div className="input-group">
+                <input
+                  type="email"
+                  placeholder="Email address"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="modern-input"
+                />
+              </div>
 
-          {error && <p className="auth-error">{error}</p>}
+              <div className="input-group">
+                <input
+                  type="password"
+                  placeholder="Password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="modern-input"
+                />
+              </div>
 
-          <button className="auth-button" type="submit" disabled={loading}>
-            {loading ? "Logging in..." : "Login"}
-          </button>
-        </form>
+              {error && <p className="error-message">{error}</p>}
 
-        <div className="auth-footer">
-          Don’t have an account? <Link to="/signup">Sign up</Link>
+              <button type="submit" disabled={loading} className="submit-btn">
+                {loading ? <span className="loader"></span> : "Sign In"}
+              </button>
+            </form>
+
+            <p className="footer-text">
+              Don’t have an account?{" "}
+              <Link to="/signup" className="login-link">
+                Sign Up
+              </Link>
+            </p>
+          </div>
         </div>
       </div>
     </div>

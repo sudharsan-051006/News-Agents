@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { supabase } from "../supabaseClient";
 import { useNavigate, Link } from "react-router-dom";
+import "../styles/Signup.css"; 
 
 function Signup() {
   const navigate = useNavigate();
-
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -15,65 +15,65 @@ function Signup() {
     setLoading(true);
     setError(null);
 
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-    });
+    const { error } = await supabase.auth.signUp({ email, password });
 
     if (error) {
       setError(error.message);
     } else {
-      // signup successful
       navigate("/preferences");
     }
-
     setLoading(false);
   };
 
   return (
-    <div style={{ padding: "2rem", maxWidth: "400px", margin: "auto" }}>
-      <h2>Create Account</h2>
+    <div className="signup-page">
+      {/* Background decorative blobs */}
+      <div className="blob blob-1"></div>
+      <div className="blob blob-2"></div>
 
-      <form onSubmit={handleSignup}>
-        <div style={{ marginBottom: "1rem" }}>
-          <input
-            type="email"
-            placeholder="Email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            style={{ width: "100%", padding: "0.5rem" }}
-          />
+      <div className="card-wrapper">
+        <div className="glass-card">
+          <div className="card-content">
+            <h2 className="title">Create Account</h2>
+            <p className="subtitle">Join our community today</p>
+
+            <form onSubmit={handleSignup} className="signup-form">
+              <div className="input-group">
+                <input
+                  type="email"
+                  placeholder="Email address"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="modern-input"
+                />
+              </div>
+
+              <div className="input-group">
+                <input
+                  type="password"
+                  placeholder="Password"
+                  required
+                  minLength={6}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="modern-input"
+                />
+              </div>
+
+              {error && <p className="error-message">{error}</p>}
+
+              <button type="submit" disabled={loading} className="submit-btn">
+                {loading ? <span className="loader"></span> : "Sign Up"}
+              </button>
+            </form>
+
+            <p className="footer-text">
+              Already have an account? <Link to="/login" className="login-link">Login</Link>
+            </p>
+          </div>
         </div>
-
-        <div style={{ marginBottom: "1rem" }}>
-          <input
-            type="password"
-            placeholder="Password (max 15 chars)"
-            required
-            minLength={6}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            style={{ width: "100%", padding: "0.5rem" }}
-          />
-        </div>
-
-        {error && (
-          <p style={{ color: "red", marginBottom: "1rem" }}>{error}</p>
-        )}
-
-        <button
-          type="submit"
-          disabled={loading}
-          style={{ width: "100%", padding: "0.5rem" }}
-        >
-          {loading ? "Creating account..." : "Sign Up"}
-        </button>
-      </form>
-
-      <p style={{ marginTop: "1rem" }}>
-        Already have an account? <Link to="/login">Login</Link>
-      </p>
+      </div>
     </div>
   );
 }
