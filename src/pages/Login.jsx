@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { supabase } from "../supabaseClient";
 import { useNavigate, Link } from "react-router-dom";
+import "../styles/Auth.css";
 
 function Login() {
   const navigate = useNavigate();
@@ -23,7 +24,6 @@ function Login() {
     if (error) {
       setError(error.message);
     } else {
-      // login successful
       navigate("/preferences");
     }
 
@@ -31,48 +31,40 @@ function Login() {
   };
 
   return (
-    <div style={{ padding: "2rem", maxWidth: "400px", margin: "auto" }}>
-      <h2>Login</h2>
+    <div className="auth-container">
+      <div className="auth-card">
+        <h2>Login</h2>
 
-      <form onSubmit={handleLogin}>
-        <div style={{ marginBottom: "1rem" }}>
+        <form onSubmit={handleLogin}>
           <input
+            className="auth-input"
             type="email"
             placeholder="Email"
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            style={{ width: "100%", padding: "0.5rem" }}
           />
-        </div>
 
-        <div style={{ marginBottom: "1rem" }}>
           <input
+            className="auth-input"
             type="password"
             placeholder="Password"
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            style={{ width: "100%", padding: "0.5rem" }}
           />
+
+          {error && <p className="auth-error">{error}</p>}
+
+          <button className="auth-button" type="submit" disabled={loading}>
+            {loading ? "Logging in..." : "Login"}
+          </button>
+        </form>
+
+        <div className="auth-footer">
+          Don’t have an account? <Link to="/signup">Sign up</Link>
         </div>
-
-        {error && (
-          <p style={{ color: "red", marginBottom: "1rem" }}>{error}</p>
-        )}
-
-        <button
-          type="submit"
-          disabled={loading}
-          style={{ width: "100%", padding: "0.5rem" }}
-        >
-          {loading ? "Logging in..." : "Login"}
-        </button>
-      </form>
-
-      <p style={{ marginTop: "1rem" }}>
-        Don’t have an account? <Link to="/signup">Sign up</Link>
-      </p>
+      </div>
     </div>
   );
 }
