@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../supabaseClient";
 import { useNavigate } from "react-router-dom";
-import "../styles/Preferences.css";
+import "../styles/Perferences.css";
 
 const ALL_CATEGORIES = ["tech", "sports", "movies", "geopolitics"];
 
