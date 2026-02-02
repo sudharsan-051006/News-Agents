@@ -1,0 +1,74 @@
+.preferences-container {
+  min-height: 100vh;
+  background: #f4f6f8;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.preferences-card {
+  background: #ffffff;
+  width: 100%;
+  max-width: 500px;
+  padding: 2rem;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+}
+
+.preferences-card h2 {
+  margin-bottom: 0.5rem;
+  text-align: center;
+}
+
+.preferences-subtitle {
+  text-align: center;
+  font-size: 0.9rem;
+  color: #666;
+  margin-bottom: 1.5rem;
+}
+
+.category-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.category-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+}
+
+.preferences-button {
+  width: 100%;
+  padding: 0.75rem;
+  margin-top: 1.25rem;
+  background: #000;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.preferences-button:disabled {
+  background: #555;
+  cursor: not-allowed;
+}
+
+.logout-button {
+  width: 100%;
+  padding: 0.65rem;
+  margin-top: 0.75rem;
+  background: #eee;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.status-text {
+  text-align: center;
+  font-size: 0.9rem;
+  color: green;
+  margin-top: 0.75rem;
+}
