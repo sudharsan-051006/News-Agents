@@ -8,6 +8,7 @@ const ALL_CATEGORIES = [
   { id: "sports", label: "Sports", icon: "🏀" },
   { id: "movies", label: "Movies", icon: "🎬" },
   { id: "geopolitics", label: "Geopolitics", icon: "🌍" },
+  { id: "local", label:"India", icon:"🇮🇳"},
 ];
 
 function Preferences() {
