@@ -56,7 +56,6 @@ function Preferences() {
     }
   };
 
-  // Grouping categories with useMemo for performance
   const grouped = useMemo(() => {
     return rssList.reduce((acc, rss) => {
       const cat = rss.category || "General";
@@ -70,60 +69,58 @@ function Preferences() {
 
   return (
     <div className="pref-container">
-  <div className="mesh-gradient"></div>
-  
-  <div className="pref-content">
-    {/* Top Navigation Row */}
-    <nav className="pref-nav">
-      <div className="logo-area">
-        <span className="logo-icon">✨</span>
-        <span className="logo-text">Digestify</span>
-      </div>
-      <button className="logout-pill" onClick={() => supabase.auth.signOut().then(() => navigate("/login"))}>
-        Logout
-      </button>
-    </nav>
-
-    <header className="pref-header">
-      <h1 className="pref-title">News Preferences</h1>
-      <p className="pref-subtitle">Select the sources that fuel your daily briefing.</p>
-    </header>
-
-    <div className="categories-stack">
-      {Object.entries(grouped).map(([category, feeds]) => (
-        <section key={category} className="pref-section">
-          <div className="section-header">
-            <h3 className="category-title">{category}</h3>
-            <div className="divider-line"></div>
+      <div className="mesh-gradient"></div>
+      
+      <div className="pref-content">
+        <nav className="pref-nav">
+          <div className="logo-area">
+            <span className="logo-icon">✨</span>
+            <span className="logo-text">elinity.in</span>
           </div>
-          <div className="sources-grid">
-            {feeds.map((rss) => (
-              <button
-                key={rss.id}
-                className={`source-card ${selected.includes(rss.id) ? "is-selected" : ""}`}
-                onClick={() => toggleRSS(rss.id)}
-              >
-                <span className="source-name">{rss.name}</span>
-                {selected.includes(rss.id) && <span className="check-icon">✓</span>}
-              </button>
-            ))}
-          </div>
-        </section>
-      ))}
-    </div>
+          <button className="logout-pill" onClick={() => supabase.auth.signOut().then(() => navigate("/login"))}>
+            Logout
+          </button>
+        </nav>
 
-    {/* Integrated Save Action */}
-    <div className="action-footer">
-      <div className="status-container">
-        {status && <span className="status-toast">{status}</span>}
+        <header className="pref-header">
+          <h1 className="pref-title">News Preferences</h1>
+          <p className="pref-subtitle">Select the sources that fuel your daily briefing.</p>
+        </header>
+
+        <div className="categories-stack">
+          {Object.entries(grouped).map(([category, feeds]) => (
+            <section key={category} className="pref-section">
+              <div className="section-header">
+                <h3 className="category-title">{category}</h3>
+                <div className="divider-line"></div>
+              </div>
+              <div className="sources-grid">
+                {feeds.map((rss) => (
+                  <button
+                    key={rss.id}
+                    className={`source-card ${selected.includes(rss.id) ? "is-selected" : ""}`}
+                    onClick={() => toggleRSS(rss.id)}
+                  >
+                    <span className="source-name">{rss.name}</span>
+                    {selected.includes(rss.id) && <span className="check-icon">✓</span>}
+                  </button>
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+
+        <div className="action-footer">
+          <div className="status-container">
+            {status && <span className="status-toast">{status}</span>}
+          </div>
+          <button className="save-btn-large" onClick={savePreferences} disabled={saving}>
+            {saving ? <div className="spinner"></div> : "Update My Feed"}
+          </button>
+          <p className="footer-note">Changes take effect on your next digest generation.</p>
+        </div>
       </div>
-      <button className="save-btn-large" onClick={savePreferences} disabled={saving}>
-        {saving ? <div className="spinner"></div> : "Update My Feed"}
-      </button>
-      <p className="footer-note">Changes take effect on your next digest generation.</p>
     </div>
-  </div>
-</div>
   );
 }
 
