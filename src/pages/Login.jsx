@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { supabase } from "../supabaseClient";
 import { useNavigate, Link } from "react-router-dom";
-import "../styles/Signup.css"; // Reuse the same CSS file for consistency
+import "../styles/Signup.css";
 
 function Login() {
   const navigate = useNavigate();
@@ -10,6 +10,7 @@ function Login() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [message, setMessage] = useState(null); // ✅ NEW
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -30,9 +31,32 @@ function Login() {
     setLoading(false);
   };
 
+  // ✅ NEW: Forgot password handler
+  const handleForgotPassword = async () => {
+    if (!email) {
+      setError("Please enter your email first.");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setMessage(null);
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: "https://news-agents-ca13pk3c1-sudharsan-051006s-projects.vercel.app/updatepassword",
+    });
+
+    if (error) {
+      setError(error.message);
+    } else {
+      setMessage("Password reset email sent! Check your inbox.");
+    }
+
+    setLoading(false);
+  };
+
   return (
     <div className="signup-page">
-      {/* Background decorative blobs */}
       <div className="blob blob-1"></div>
       <div className="blob blob-2"></div>
 
@@ -65,7 +89,21 @@ function Login() {
                 />
               </div>
 
+              {/* Forgot Password Link */}
+              <p
+                style={{
+                  textAlign: "right",
+                  cursor: "pointer",
+                  fontSize: "14px",
+                  color: "#4f46e5",
+                }}
+                onClick={handleForgotPassword}
+              >
+                Forgot Password?
+              </p>
+
               {error && <p className="error-message">{error}</p>}
+              {message && <p style={{ color: "green" }}>{message}</p>}
 
               <button type="submit" disabled={loading} className="submit-btn">
                 {loading ? <span className="loader"></span> : "Sign In"}
