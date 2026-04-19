@@ -10,7 +10,8 @@ function Login() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [message, setMessage] = useState(null); // ✅ NEW
+  const [message, setMessage] = useState(null);
+  const [resetSent, setResetSent] = useState(false); // ✅ NEW
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -31,12 +32,14 @@ function Login() {
     setLoading(false);
   };
 
-  // ✅ NEW: Forgot password handler
+  // ✅ Forgot password handler
   const handleForgotPassword = async () => {
     if (!email) {
       setError("Please enter your email first.");
       return;
     }
+
+    if (loading || resetSent) return; // extra safety
 
     setLoading(true);
     setError(null);
@@ -50,6 +53,7 @@ function Login() {
       setError(error.message);
     } else {
       setMessage("Password reset email sent! Check your inbox.");
+      setResetSent(true); // ✅ lock further clicks
     }
 
     setLoading(false);
@@ -89,23 +93,35 @@ function Login() {
                 />
               </div>
 
-              {/* Forgot Password Link */}
+              {/* Forgot Password */}
               <p
                 style={{
                   textAlign: "right",
-                  cursor: "pointer",
+                  cursor:
+                    loading || resetSent ? "not-allowed" : "pointer",
                   fontSize: "14px",
-                  color: "#4f46e5",
+                  color:
+                    loading || resetSent ? "#9ca3af" : "#4f46e5",
+                  pointerEvents:
+                    loading || resetSent ? "none" : "auto",
                 }}
-                onClick={handleForgotPassword}
+                onClick={
+                  !loading && !resetSent
+                    ? handleForgotPassword
+                    : undefined
+                }
               >
-                Forgot Password?
+                {resetSent ? "Email Sent ✔" : "Forgot Password?"}
               </p>
 
               {error && <p className="error-message">{error}</p>}
               {message && <p style={{ color: "green" }}>{message}</p>}
 
-              <button type="submit" disabled={loading} className="submit-btn">
+              <button
+                type="submit"
+                disabled={loading}
+                className="submit-btn"
+              >
                 {loading ? <span className="loader"></span> : "Sign In"}
               </button>
             </form>
