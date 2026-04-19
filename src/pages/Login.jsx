@@ -43,7 +43,7 @@ function Login() {
     setMessage(null);
 
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: "https://news-agents-ca13pk3c1-sudharsan-051006s-projects.vercel.app/updatepassword",
+      redirectTo: "https://www.elinity.in/updatepassword",
     });
 
     if (error) {
