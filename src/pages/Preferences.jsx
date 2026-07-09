@@ -74,49 +74,62 @@ function Preferences() {
     );
   };
 
-  const handleAddSource = async (e) => {
-    e.preventDefault();
-    if (!newSourceName || !newSourceUrl) {
-      setStatus("Please provide both a name and a URL.");
-      return;
+const handleAddSource = async (e) => {
+  e.preventDefault();
+  if (!newSourceName || !newSourceUrl) {
+    setStatus("Please provide both a name and a URL.");
+    return;
+  }
+
+  setAddingSource(true);
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const formattedCategory = newSourceCategory.trim() || "General";
+    
+    // 1. Create the new feed object
+    const newFeedPayload = { 
+      name: newSourceName.trim(), 
+      url: newSourceUrl.trim(), 
+      category: formattedCategory
+      // user_id: user.id <-- Uncomment this line if your 'rss' table has a user_id column!
+    };
+
+    // 2. Perform the insert without forcing a complex immediate filter selection row back
+    const { data: insertedData, error: rssError } = await supabase
+      .from("rss")
+      .insert([newFeedPayload])
+      .select(); // Grabs the array of records inserted
+
+    if (rssError) throw rssError;
+
+    // Fallback: If RLS prevents immediate selection returns, we can fetch all or mock it
+    const confirmedRss = (insertedData && insertedData[0]) ? insertedData[0] : null;
+
+    if (confirmedRss) {
+      // Update local state lists so the UI reflects changes instantly
+      setRssList((prev) => [confirmedRss, ...prev]);
+      setSelected((prev) => [...prev, confirmedRss.id]);
+    } else {
+      // If select() returned nothing due to RLS, re-fetch the list to display it securely
+      await loadAll();
     }
+    
+    setNewSourceName("");
+    setNewSourceUrl("");
+    setNewSourceCategory("");
+    setShowAddForm(false);
+    setStatus("Source added and selected!");
+    setTimeout(() => setStatus(""), 3000);
 
-    setAddingSource(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const formattedCategory = newSourceCategory.trim() || "General";
-      const { data: newRssData, error: rssError } = await supabase
-        .from("rss")
-        .insert([{ 
-          name: newSourceName.trim(), 
-          url: newSourceUrl.trim(), 
-          category: formattedCategory 
-        }])
-        .select()
-        .single();
-
-      if (rssError) throw rssError;
-
-      if (newRssData) {
-        setRssList((prev) => [newRssData, ...prev]);
-        setSelected((prev) => [...prev, newRssData.id]);
-        
-        setNewSourceName("");
-        setNewSourceUrl("");
-        setNewSourceCategory("");
-        setShowAddForm(false);
-        setStatus("Source added and selected!");
-        setTimeout(() => setStatus(""), 3000);
-      }
-    } catch (err) {
-      console.error("Error adding source:", err);
-      setStatus("Failed to add new source.");
-    } finally {
-      setAddingSource(false);
-    }
-  };
+  } catch (err) {
+    console.error("Error adding source details:", err);
+    setStatus("Failed to add new source. Check database permissions.");
+  } finally {
+    setAddingSource(false);
+  }
+};
 
   const savePreferences = async () => {
     setSaving(true);
