@@ -10,16 +10,33 @@ function Preferences() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("");
+  
+  // New state for handling searches
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searching, setSearching] = useState(false);
 
   useEffect(() => {
     loadAll();
   }, []);
+
+  // Trigger search when searchQuery changes (with a simple debounce)
+  useEffect(() => {
+    // Skip the very first render since loadAll handles it
+    if (loading) return; 
+
+    const delayDebounceFn = setTimeout(() => {
+      handleSearch(searchQuery);
+    }, 400); // 400ms delay to avoid over-querying Supabase
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchQuery]);
 
   const loadAll = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { navigate("/login"); return; }
 
+      // Fetch all sources initially
       const { data: rssData } = await supabase.from("rss").select("*");
       const { data: userData } = await supabase.from("user_sources").select("rss_id").eq("user_id", user.id);
 
@@ -29,6 +46,28 @@ function Preferences() {
       console.error("Load error:", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Dedicated function to query Supabase for names or categories matching the input
+  const handleSearch = async (query) => {
+    setSearching(true);
+    try {
+      let supabaseQuery = supabase.from("rss").select("*");
+      
+      if (query.trim() !== "") {
+        // Searches if 'name' contains the query OR 'category' contains the query (case-insensitive)
+        supabaseQuery = supabaseQuery.or(`name.ilike.%${query}%,category.ilike.%${query}%`);
+      }
+      
+      const { data, error } = await supabaseQuery;
+      if (error) throw error;
+      
+      setRssList(data || []);
+    } catch (err) {
+      console.error("Search error:", err);
+    } finally {
+      setSearching(false);
     }
   };
 
@@ -85,29 +124,46 @@ function Preferences() {
         <header className="pref-header">
           <h1 className="pref-title">News Preferences</h1>
           <p className="pref-subtitle">Select the sources that fuel your daily briefing.</p>
+          
+          {/* --- SEARCH BAR IMPLEMENTATION --- */}
+          <div className="search-wrapper">
+            <input
+              type="text"
+              placeholder="Search by name or category..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pref-search-input"
+            />
+            {searching && <span className="search-spinner">⏳</span>}
+          </div>
+          {/* ---------------------------------- */}
         </header>
 
         <div className="categories-stack">
-          {Object.entries(grouped).map(([category, feeds]) => (
-            <section key={category} className="pref-section">
-              <div className="section-header">
-                <h3 className="category-title">{category}</h3>
-                <div className="divider-line"></div>
-              </div>
-              <div className="sources-grid">
-                {feeds.map((rss) => (
-                  <button
-                    key={rss.id}
-                    className={`source-card ${selected.includes(rss.id) ? "is-selected" : ""}`}
-                    onClick={() => toggleRSS(rss.id)}
-                  >
-                    <span className="source-name">{rss.name}</span>
-                    {selected.includes(rss.id) && <span className="check-icon">✓</span>}
-                  </button>
-                ))}
-              </div>
-            </section>
-          ))}
+          {Object.keys(grouped).length === 0 ? (
+            <div className="no-results">No sources found matching "{searchQuery}"</div>
+          ) : (
+            Object.entries(grouped).map(([category, feeds]) => (
+              <section key={category} className="pref-section">
+                <div className="section-header">
+                  <h3 className="category-title">{category}</h3>
+                  <div className="divider-line"></div>
+                </div>
+                <div className="sources-grid">
+                  {feeds.map((rss) => (
+                    <button
+                      key={rss.id}
+                      className={`source-card ${selected.includes(rss.id) ? "is-selected" : ""}`}
+                      onClick={() => toggleRSS(rss.id)}
+                    >
+                      <span className="source-name">{rss.name}</span>
+                      {selected.includes(rss.id) && <span className="check-icon">✓</span>}
+                    </button>
+                  ))}
+                </div>
+              </section>
+            ))
+          )}
         </div>
 
         <div className="action-footer">
