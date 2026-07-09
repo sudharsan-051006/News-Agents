@@ -14,7 +14,6 @@ function Preferences() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searching, setSearching] = useState(false);
 
-  // New states for adding a custom RSS source
   const [showAddForm, setShowAddForm] = useState(false);
   const [newSourceName, setNewSourceName] = useState("");
   const [newSourceUrl, setNewSourceUrl] = useState("");
@@ -75,7 +74,6 @@ function Preferences() {
     );
   };
 
-  // Function to insert a brand new source into Supabase
   const handleAddSource = async (e) => {
     e.preventDefault();
     if (!newSourceName || !newSourceUrl) {
@@ -88,7 +86,6 @@ function Preferences() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // 1. Insert the new source into the main 'rss' table
       const formattedCategory = newSourceCategory.trim() || "General";
       const { data: newRssData, error: rssError } = await supabase
         .from("rss")
@@ -97,18 +94,15 @@ function Preferences() {
           url: newSourceUrl.trim(), 
           category: formattedCategory 
         }])
-        .select() // Tells Supabase to return the newly inserted row
+        .select()
         .single();
 
       if (rssError) throw rssError;
 
-      // 2. Automatically opt the user into this source right away
       if (newRssData) {
-        // Update local state lists so the UI reflects changes instantly
         setRssList((prev) => [newRssData, ...prev]);
         setSelected((prev) => [...prev, newRssData.id]);
         
-        // Reset the form fields
         setNewSourceName("");
         setNewSourceUrl("");
         setNewSourceCategory("");
@@ -172,61 +166,63 @@ function Preferences() {
           <h1 className="pref-title">News Preferences</h1>
           <p className="pref-subtitle">Select the sources that fuel your daily briefing.</p>
           
-          <div className="search-wrapper">
-            <input
-              type="text"
-              placeholder="Search by name or category..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pref-search-input"
-            />
-            {searching && <span className="search-spinner">⏳</span>}
+          {/* Grouped for responsive layout control */}
+          <div className="pref-header-actions">
+            <div className="search-wrapper">
+              <input
+                type="text"
+                placeholder="Search name or category..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pref-search-input"
+              />
+              {searching && <span className="search-spinner">⏳</span>}
+            </div>
+
+            <div className="add-source-wrapper">
+              <button 
+                type="button"
+                className="toggle-add-btn" 
+                onClick={() => setShowAddForm(!showAddForm)}
+              >
+                {showAddForm ? "✕ Close Form" : "+ Add Custom Source"}
+              </button>
+            </div>
           </div>
 
-          {/* --- ADD NEW RSS SOURCE SECTION --- */}
-          <div className="add-source-wrapper">
-            <button 
-              className="toggle-add-btn" 
-              onClick={() => setShowAddForm(!showAddForm)}
-            >
-              {showAddForm ? "✕ Cancel" : "+ Suggest/Add a Custom Source"}
-            </button>
-
-            {showAddForm && (
-              <form onSubmit={handleAddSource} className="add-source-form">
-                <div className="form-group">
-                  <input 
-                    type="text" 
-                    placeholder="Source Name (e.g., TechCrunch)" 
-                    value={newSourceName}
-                    onChange={(e) => setNewSourceName(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <input 
-                    type="url" 
-                    placeholder="RSS Feed URL (e.g., https://site.com/feed)" 
-                    value={newSourceUrl}
-                    onChange={(e) => setNewSourceUrl(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <input 
-                    type="text" 
-                    placeholder="Category (e.g., Tech, Finance) - Optional" 
-                    value={newSourceCategory}
-                    onChange={(e) => setNewSourceCategory(e.target.value)}
-                  />
-                </div>
-                <button type="submit" className="submit-source-btn" disabled={addingSource}>
-                  {addingSource ? "Adding..." : "Add Source"}
-                </button>
-              </form>
-            )}
-          </div>
-          {/* ---------------------------------- */}
+          {showAddForm && (
+            <form onSubmit={handleAddSource} className="add-source-form">
+              <div className="form-group">
+                <input 
+                  type="text" 
+                  placeholder="Source Name (e.g., TechCrunch)" 
+                  value={newSourceName}
+                  onChange={(e) => setNewSourceName(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <input 
+                  type="url" 
+                  placeholder="RSS Feed URL" 
+                  value={newSourceUrl}
+                  onChange={(e) => setNewSourceUrl(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <input 
+                  type="text" 
+                  placeholder="Category (Optional)" 
+                  value={newSourceCategory}
+                  onChange={(e) => setNewSourceCategory(e.target.value)}
+                />
+              </div>
+              <button type="submit" className="submit-source-btn" disabled={addingSource}>
+                {addingSource ? "Adding..." : "Add & Select Source"}
+              </button>
+            </form>
+          )}
         </header>
 
         <div className="categories-stack">
