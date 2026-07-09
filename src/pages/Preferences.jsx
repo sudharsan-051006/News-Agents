@@ -11,22 +11,26 @@ function Preferences() {
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("");
   
-  // New state for handling searches
   const [searchQuery, setSearchQuery] = useState("");
   const [searching, setSearching] = useState(false);
+
+  // New states for adding a custom RSS source
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newSourceName, setNewSourceName] = useState("");
+  const [newSourceUrl, setNewSourceUrl] = useState("");
+  const [newSourceCategory, setNewSourceCategory] = useState("");
+  const [addingSource, setAddingSource] = useState(false);
 
   useEffect(() => {
     loadAll();
   }, []);
 
-  // Trigger search when searchQuery changes (with a simple debounce)
   useEffect(() => {
-    // Skip the very first render since loadAll handles it
     if (loading) return; 
 
     const delayDebounceFn = setTimeout(() => {
       handleSearch(searchQuery);
-    }, 400); // 400ms delay to avoid over-querying Supabase
+    }, 400);
 
     return () => clearTimeout(delayDebounceFn);
   }, [searchQuery]);
@@ -36,7 +40,6 @@ function Preferences() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { navigate("/login"); return; }
 
-      // Fetch all sources initially
       const { data: rssData } = await supabase.from("rss").select("*");
       const { data: userData } = await supabase.from("user_sources").select("rss_id").eq("user_id", user.id);
 
@@ -49,20 +52,15 @@ function Preferences() {
     }
   };
 
-  // Dedicated function to query Supabase for names or categories matching the input
   const handleSearch = async (query) => {
     setSearching(true);
     try {
       let supabaseQuery = supabase.from("rss").select("*");
-      
       if (query.trim() !== "") {
-        // Searches if 'name' contains the query OR 'category' contains the query (case-insensitive)
         supabaseQuery = supabaseQuery.or(`name.ilike.%${query}%,category.ilike.%${query}%`);
       }
-      
       const { data, error } = await supabaseQuery;
       if (error) throw error;
-      
       setRssList(data || []);
     } catch (err) {
       console.error("Search error:", err);
@@ -75,6 +73,55 @@ function Preferences() {
     setSelected((prev) =>
       prev.includes(rssId) ? prev.filter((id) => id !== rssId) : [...prev, rssId]
     );
+  };
+
+  // Function to insert a brand new source into Supabase
+  const handleAddSource = async (e) => {
+    e.preventDefault();
+    if (!newSourceName || !newSourceUrl) {
+      setStatus("Please provide both a name and a URL.");
+      return;
+    }
+
+    setAddingSource(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // 1. Insert the new source into the main 'rss' table
+      const formattedCategory = newSourceCategory.trim() || "General";
+      const { data: newRssData, error: rssError } = await supabase
+        .from("rss")
+        .insert([{ 
+          name: newSourceName.trim(), 
+          url: newSourceUrl.trim(), 
+          category: formattedCategory 
+        }])
+        .select() // Tells Supabase to return the newly inserted row
+        .single();
+
+      if (rssError) throw rssError;
+
+      // 2. Automatically opt the user into this source right away
+      if (newRssData) {
+        // Update local state lists so the UI reflects changes instantly
+        setRssList((prev) => [newRssData, ...prev]);
+        setSelected((prev) => [...prev, newRssData.id]);
+        
+        // Reset the form fields
+        setNewSourceName("");
+        setNewSourceUrl("");
+        setNewSourceCategory("");
+        setShowAddForm(false);
+        setStatus("Source added and selected!");
+        setTimeout(() => setStatus(""), 3000);
+      }
+    } catch (err) {
+      console.error("Error adding source:", err);
+      setStatus("Failed to add new source.");
+    } finally {
+      setAddingSource(false);
+    }
   };
 
   const savePreferences = async () => {
@@ -125,7 +172,6 @@ function Preferences() {
           <h1 className="pref-title">News Preferences</h1>
           <p className="pref-subtitle">Select the sources that fuel your daily briefing.</p>
           
-          {/* --- SEARCH BAR IMPLEMENTATION --- */}
           <div className="search-wrapper">
             <input
               type="text"
@@ -135,6 +181,50 @@ function Preferences() {
               className="pref-search-input"
             />
             {searching && <span className="search-spinner">⏳</span>}
+          </div>
+
+          {/* --- ADD NEW RSS SOURCE SECTION --- */}
+          <div className="add-source-wrapper">
+            <button 
+              className="toggle-add-btn" 
+              onClick={() => setShowAddForm(!showAddForm)}
+            >
+              {showAddForm ? "✕ Cancel" : "+ Suggest/Add a Custom Source"}
+            </button>
+
+            {showAddForm && (
+              <form onSubmit={handleAddSource} className="add-source-form">
+                <div className="form-group">
+                  <input 
+                    type="text" 
+                    placeholder="Source Name (e.g., TechCrunch)" 
+                    value={newSourceName}
+                    onChange={(e) => setNewSourceName(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <input 
+                    type="url" 
+                    placeholder="RSS Feed URL (e.g., https://site.com/feed)" 
+                    value={newSourceUrl}
+                    onChange={(e) => setNewSourceUrl(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <input 
+                    type="text" 
+                    placeholder="Category (e.g., Tech, Finance) - Optional" 
+                    value={newSourceCategory}
+                    onChange={(e) => setNewSourceCategory(e.target.value)}
+                  />
+                </div>
+                <button type="submit" className="submit-source-btn" disabled={addingSource}>
+                  {addingSource ? "Adding..." : "Add Source"}
+                </button>
+              </form>
+            )}
           </div>
           {/* ---------------------------------- */}
         </header>
