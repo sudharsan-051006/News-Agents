@@ -86,16 +86,15 @@ const handleAddSource = async (e) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    const formattedCategory = newSourceCategory.trim() || "General";
+    // Force lowercase and fallback to "general"
+    const formattedCategory = newSourceCategory.trim() ? newSourceCategory.trim().toLowerCase() : "general";
     
-    // Fixed: changed 'url' to 'rss_url' to match your database column precisely
     const newFeedPayload = { 
       name: newSourceName.trim(), 
       rss_url: newSourceUrl.trim(), 
       category: formattedCategory
     };
 
-    // Perform the insert
     const { data: insertedData, error: rssError } = await supabase
       .from("rss")
       .insert([newFeedPayload])
@@ -109,7 +108,6 @@ const handleAddSource = async (e) => {
       setRssList((prev) => [confirmedRss, ...prev]);
       setSelected((prev) => [...prev, confirmedRss.id]);
     } else {
-      // Fallback fallback if RLS policy hides the immediate select result
       await loadAll();
     }
     
@@ -122,7 +120,7 @@ const handleAddSource = async (e) => {
 
   } catch (err) {
     console.error("Error adding source details:", err);
-    setStatus("Failed to add new source. Check database permissions.");
+    setStatus("Failed to add new source.");
   } finally {
     setAddingSource(false);
   }
@@ -146,13 +144,17 @@ const handleAddSource = async (e) => {
   };
 
   const grouped = useMemo(() => {
-    return rssList.reduce((acc, rss) => {
-      const cat = rss.category || "General";
-      if (!acc[cat]) acc[cat] = [];
-      acc[cat].push(rss);
-      return acc;
-    }, {});
-  }, [rssList]);
+  return rssList.reduce((acc, rss) => {
+    // Force lowercase and remove hidden trailing spaces
+    const cat = (rss.category || "general").trim().toLowerCase();
+
+    if (!acc[cat]) acc[cat] = [];
+    acc[cat].push(rss);
+    return acc;
+  }, {});
+}, [rssList]);
+
+  
 
   if (loading) return <div className="pref-container"><div className="loader-main"></div></div>;
 
