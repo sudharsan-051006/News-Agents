@@ -324,3 +324,43 @@
   animation: spin 0.8s linear infinite;
   margin: 0 auto;
 }
+
+.search-wrapper {
+  position: relative;
+  max-width: 500px;
+  margin: 1.5rem auto 0 auto;
+}
+
+.pref-search-input {
+  width: 100%;
+  padding: 0.8rem 1.2rem;
+  font-size: 1rem;
+  border-radius: 50px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+  outline: none;
+  transition: all 0.3s ease;
+}
+
+.pref-search-input:focus {
+  border-color: #a855f7; /* Matching your gradient theme */
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 0 15px rgba(168, 85, 247, 0.2);
+}
+
+.search-spinner {
+  position: absolute;
+  right: 15px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.9rem;
+  opacity: 0.7;
+}
+
+.no-results {
+  text-align: center;
+  padding: 3rem;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 1.1rem;
+}
