@@ -75,56 +75,90 @@ function Preferences() {
   };
 
   const handleAddSource = async (e) => {
-    e.preventDefault();
-    if (!newSourceName || !newSourceUrl) {
-      setStatus("Please provide both a name and a URL.");
+  e.preventDefault();
+
+  if (!newSourceName || !newSourceUrl) {
+    setStatus("Please provide both a name and a URL.");
+    return;
+  }
+
+  setAddingSource(true);
+
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      setStatus("Please log in.");
       return;
     }
 
-    setAddingSource(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+    // STEP 1: Validate RSS URL using Edge Function
+    setStatus("Validating RSS feed...");
 
-      const formattedCategory = newSourceCategory.trim() ? newSourceCategory.trim().toLowerCase() : "general";
-      
-      const newFeedPayload = { 
-        name: newSourceName.trim(), 
-        rss_url: newSourceUrl.trim(), 
-        category: formattedCategory
-      };
+    const { data: validation, error: validationError } =
+      await supabase.functions.invoke("validate-rss", {
+        body: {
+          url: newSourceUrl.trim(),
+        },
+      });
 
-      const { data: insertedData, error: rssError } = await supabase
-        .from("rss")
-        .insert([newFeedPayload])
-        .select(); 
-
-      if (rssError) throw rssError;
-
-      const confirmedRss = (insertedData && insertedData[0]) ? insertedData[0] : null;
-
-      if (confirmedRss) {
-        setRssList((prev) => [confirmedRss, ...prev]);
-        setSelected((prev) => [...prev, confirmedRss.id]);
-      } else {
-        await loadAll();
-      }
-      
-      setNewSourceName("");
-      setNewSourceUrl("");
-      setNewSourceCategory("");
-      setShowAddForm(false);
-      setStatus("Source added and selected!");
-      setTimeout(() => setStatus(""), 3000);
-
-    } catch (err) {
-      console.error("Error adding source details:", err);
-      setStatus("Failed to add new source.");
-    } finally {
-      setAddingSource(false);
+    if (validationError) {
+      console.error(validationError);
+      setStatus("Failed to validate RSS feed.");
+      return;
     }
-  };
 
+    console.log("Validation:", validation);
+
+    if (!validation?.isValid) {
+      setStatus(validation?.error || "Invalid RSS Feed.");
+      return;
+    }
+
+    // STEP 2: Insert only if validation passed
+    const formattedCategory = newSourceCategory.trim()
+      ? newSourceCategory.trim().toLowerCase()
+      : "general";
+
+    const newFeedPayload = {
+      name: newSourceName.trim(),
+      rss_url: newSourceUrl.trim(),
+      category: formattedCategory,
+    };
+
+    const { data: insertedData, error: rssError } = await supabase
+      .from("rss")
+      .insert([newFeedPayload])
+      .select();
+
+    if (rssError) throw rssError;
+
+    const confirmedRss = insertedData?.[0];
+
+    if (confirmedRss) {
+      setRssList((prev) => [confirmedRss, ...prev]);
+      setSelected((prev) => [...prev, confirmedRss.id]);
+    } else {
+      await loadAll();
+    }
+
+    setNewSourceName("");
+    setNewSourceUrl("");
+    setNewSourceCategory("");
+    setShowAddForm(false);
+
+    setStatus("RSS feed added successfully!");
+
+    setTimeout(() => setStatus(""), 3000);
+  } catch (err) {
+    console.error(err);
+    setStatus("Failed to add source.");
+  } finally {
+    setAddingSource(false);
+  }
+};
   const savePreferences = async () => {
     setSaving(true);
     const { data: { user } } = await supabase.auth.getUser();
