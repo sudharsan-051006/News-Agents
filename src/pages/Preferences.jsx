@@ -74,57 +74,57 @@ function Preferences() {
     );
   };
 
-const handleAddSource = async (e) => {
-  e.preventDefault();
-  if (!newSourceName || !newSourceUrl) {
-    setStatus("Please provide both a name and a URL.");
-    return;
-  }
-
-  setAddingSource(true);
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    // Force lowercase and fallback to "general"
-    const formattedCategory = newSourceCategory.trim() ? newSourceCategory.trim().toLowerCase() : "general";
-    
-    const newFeedPayload = { 
-      name: newSourceName.trim(), 
-      rss_url: newSourceUrl.trim(), 
-      category: formattedCategory
-    };
-
-    const { data: insertedData, error: rssError } = await supabase
-      .from("rss")
-      .insert([newFeedPayload])
-      .select(); 
-
-    if (rssError) throw rssError;
-
-    const confirmedRss = (insertedData && insertedData[0]) ? insertedData[0] : null;
-
-    if (confirmedRss) {
-      setRssList((prev) => [confirmedRss, ...prev]);
-      setSelected((prev) => [...prev, confirmedRss.id]);
-    } else {
-      await loadAll();
+  const handleAddSource = async (e) => {
+    e.preventDefault();
+    if (!newSourceName || !newSourceUrl) {
+      setStatus("Please provide both a name and a URL.");
+      return;
     }
-    
-    setNewSourceName("");
-    setNewSourceUrl("");
-    setNewSourceCategory("");
-    setShowAddForm(false);
-    setStatus("Source added and selected!");
-    setTimeout(() => setStatus(""), 3000);
 
-  } catch (err) {
-    console.error("Error adding source details:", err);
-    setStatus("Failed to add new source.");
-  } finally {
-    setAddingSource(false);
-  }
-};
+    setAddingSource(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const formattedCategory = newSourceCategory.trim() ? newSourceCategory.trim().toLowerCase() : "general";
+      
+      const newFeedPayload = { 
+        name: newSourceName.trim(), 
+        rss_url: newSourceUrl.trim(), 
+        category: formattedCategory
+      };
+
+      const { data: insertedData, error: rssError } = await supabase
+        .from("rss")
+        .insert([newFeedPayload])
+        .select(); 
+
+      if (rssError) throw rssError;
+
+      const confirmedRss = (insertedData && insertedData[0]) ? insertedData[0] : null;
+
+      if (confirmedRss) {
+        setRssList((prev) => [confirmedRss, ...prev]);
+        setSelected((prev) => [...prev, confirmedRss.id]);
+      } else {
+        await loadAll();
+      }
+      
+      setNewSourceName("");
+      setNewSourceUrl("");
+      setNewSourceCategory("");
+      setShowAddForm(false);
+      setStatus("Source added and selected!");
+      setTimeout(() => setStatus(""), 3000);
+
+    } catch (err) {
+      console.error("Error adding source details:", err);
+      setStatus("Failed to add new source.");
+    } finally {
+      setAddingSource(false);
+    }
+  };
+
   const savePreferences = async () => {
     setSaving(true);
     const { data: { user } } = await supabase.auth.getUser();
@@ -143,18 +143,29 @@ const handleAddSource = async (e) => {
     }
   };
 
+  /* --- MODIFIED TO RETURN ONLY TOP 4 ITEMS PER CATEGORY --- */
   const grouped = useMemo(() => {
-  return rssList.reduce((acc, rss) => {
-    // Force lowercase and remove hidden trailing spaces
-    const cat = (rss.category || "general").trim().toLowerCase();
+    const counts = {};
+    
+    return rssList.reduce((acc, rss) => {
+      const cat = (rss.category || "general").trim().toLowerCase();
 
-    if (!acc[cat]) acc[cat] = [];
-    acc[cat].push(rss);
-    return acc;
-  }, {});
-}, [rssList]);
+      // Initialize category array if missing
+      if (!acc[cat]) {
+        acc[cat] = [];
+        counts[cat] = 0;
+      }
 
-  
+      // Only push to array if we haven't hit 4 items for this group yet
+      if (counts[cat] < 4) {
+        acc[cat].push(rss);
+        counts[cat]++;
+      }
+
+      return acc;
+    }, {});
+  }, [rssList]);
+  /* -------------------------------------------------------- */
 
   if (loading) return <div className="pref-container"><div className="loader-main"></div></div>;
 
@@ -177,7 +188,6 @@ const handleAddSource = async (e) => {
           <h1 className="pref-title">News Preferences</h1>
           <p className="pref-subtitle">Select the sources that fuel your daily briefing.</p>
           
-          {/* Grouped for responsive layout control */}
           <div className="pref-header-actions">
             <div className="search-wrapper">
               <input
