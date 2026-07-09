@@ -88,31 +88,28 @@ const handleAddSource = async (e) => {
 
     const formattedCategory = newSourceCategory.trim() || "General";
     
-    // 1. Create the new feed object
+    // Fixed: changed 'url' to 'rss_url' to match your database column precisely
     const newFeedPayload = { 
       name: newSourceName.trim(), 
-      url: newSourceUrl.trim(), 
+      rss_url: newSourceUrl.trim(), 
       category: formattedCategory
-      // user_id: user.id <-- Uncomment this line if your 'rss' table has a user_id column!
     };
 
-    // 2. Perform the insert without forcing a complex immediate filter selection row back
+    // Perform the insert
     const { data: insertedData, error: rssError } = await supabase
       .from("rss")
       .insert([newFeedPayload])
-      .select(); // Grabs the array of records inserted
+      .select(); 
 
     if (rssError) throw rssError;
 
-    // Fallback: If RLS prevents immediate selection returns, we can fetch all or mock it
     const confirmedRss = (insertedData && insertedData[0]) ? insertedData[0] : null;
 
     if (confirmedRss) {
-      // Update local state lists so the UI reflects changes instantly
       setRssList((prev) => [confirmedRss, ...prev]);
       setSelected((prev) => [...prev, confirmedRss.id]);
     } else {
-      // If select() returned nothing due to RLS, re-fetch the list to display it securely
+      // Fallback fallback if RLS policy hides the immediate select result
       await loadAll();
     }
     
@@ -130,7 +127,6 @@ const handleAddSource = async (e) => {
     setAddingSource(false);
   }
 };
-
   const savePreferences = async () => {
     setSaving(true);
     const { data: { user } } = await supabase.auth.getUser();
