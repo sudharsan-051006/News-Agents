@@ -1,7 +1,9 @@
 import { useEffect, useState, useMemo } from "react";
 import { supabase } from "../supabaseClient";
 import { useNavigate } from "react-router-dom";
+import SpecularButton from "../components/SpecularButton"; // Adjust path if needed
 import "../styles/Perferences.css";
+import FloatingLines from "../components/FloatingLines";
 
 function Preferences() {
   const navigate = useNavigate();
@@ -10,29 +12,12 @@ function Preferences() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("");
-  
   const [searchQuery, setSearchQuery] = useState("");
-  const [searching, setSearching] = useState(false);
-
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [newSourceName, setNewSourceName] = useState("");
-  const [newSourceUrl, setNewSourceUrl] = useState("");
-  const [newSourceCategory, setNewSourceCategory] = useState("");
-  const [addingSource, setAddingSource] = useState(false);
+  const [activeCategory, setActiveCategory] = useState("All");
 
   useEffect(() => {
     loadAll();
   }, []);
-
-  useEffect(() => {
-    if (loading) return; 
-
-    const delayDebounceFn = setTimeout(() => {
-      handleSearch(searchQuery);
-    }, 400);
-
-    return () => clearTimeout(delayDebounceFn);
-  }, [searchQuery]);
 
   const loadAll = async () => {
     try {
@@ -51,114 +36,24 @@ function Preferences() {
     }
   };
 
-  const handleSearch = async (query) => {
-    setSearching(true);
-    try {
-      let supabaseQuery = supabase.from("rss").select("*");
-      if (query.trim() !== "") {
-        supabaseQuery = supabaseQuery.or(`name.ilike.%${query}%,category.ilike.%${query}%`);
-      }
-      const { data, error } = await supabaseQuery;
-      if (error) throw error;
-      setRssList(data || []);
-    } catch (err) {
-      console.error("Search error:", err);
-    } finally {
-      setSearching(false);
-    }
-  };
-
   const toggleRSS = (rssId) => {
     setSelected((prev) =>
       prev.includes(rssId) ? prev.filter((id) => id !== rssId) : [...prev, rssId]
     );
   };
 
-  const handleAddSource = async (e) => {
-  e.preventDefault();
-
-  if (!newSourceName || !newSourceUrl) {
-    setStatus("Please provide both a name and a URL.");
-    return;
-  }
-
-  setAddingSource(true);
-
-  try {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      setStatus("Please log in.");
-      return;
-    }
-
-    // STEP 1: Validate RSS URL using Edge Function
-    setStatus("Validating RSS feed...");
-
-    const { data: validation, error: validationError } =
-      await supabase.functions.invoke("validate-rss", {
-        body: {
-          url: newSourceUrl.trim(),
-        },
-      });
-
-    if (validationError) {
-      console.error(validationError);
-      setStatus("Failed to validate RSS feed.");
-      return;
-    }
-
-    console.log("Validation:", validation);
-
-    if (!validation?.isValid) {
-      setStatus(validation?.error || "Invalid RSS Feed.");
-      return;
-    }
-
-    // STEP 2: Insert only if validation passed
-    const formattedCategory = newSourceCategory.trim()
-      ? newSourceCategory.trim().toLowerCase()
-      : "general";
-
-    const newFeedPayload = {
-      name: newSourceName.trim(),
-      rss_url: newSourceUrl.trim(),
-      category: formattedCategory,
-    };
-
-    const { data: insertedData, error: rssError } = await supabase
-      .from("rss")
-      .insert([newFeedPayload])
-      .select();
-
-    if (rssError) throw rssError;
-
-    const confirmedRss = insertedData?.[0];
-
-    if (confirmedRss) {
-      setRssList((prev) => [confirmedRss, ...prev]);
-      setSelected((prev) => [...prev, confirmedRss.id]);
+  // Bulk select/deselect for a specific category
+  const toggleCategoryAll = (categoryFeeds) => {
+    const feedIds = categoryFeeds.map(f => f.id);
+    const allSelected = feedIds.every(id => selected.includes(id));
+    
+    if (allSelected) {
+      setSelected(prev => prev.filter(id => !feedIds.includes(id)));
     } else {
-      await loadAll();
+      setSelected(prev => [...new Set([...prev, ...feedIds])]);
     }
+  };
 
-    setNewSourceName("");
-    setNewSourceUrl("");
-    setNewSourceCategory("");
-    setShowAddForm(false);
-
-    setStatus("RSS feed added successfully!");
-
-    setTimeout(() => setStatus(""), 3000);
-  } catch (err) {
-    console.error(err);
-    setStatus("Failed to add source.");
-  } finally {
-    setAddingSource(false);
-  }
-};
   const savePreferences = async () => {
     setSaving(true);
     const { data: { user } } = await supabase.auth.getUser();
@@ -168,8 +63,8 @@ function Preferences() {
         const inserts = selected.map((rss_id) => ({ user_id: user.id, rss_id }));
         await supabase.from("user_sources").insert(inserts);
       }
-      setStatus("Preferences synced successfully!");
-      setTimeout(() => setStatus(""), 3000);
+      setStatus("Preferences synced successfully ✨");
+      setTimeout(() => setStatus(""), 3500);
     } catch (err) {
       setStatus("Failed to save changes.");
     } finally {
@@ -177,144 +72,180 @@ function Preferences() {
     }
   };
 
-  /* --- MODIFIED TO RETURN ONLY TOP 4 ITEMS PER CATEGORY --- */
+  // Filtered and Grouped RSS feeds
   const grouped = useMemo(() => {
-    const counts = {};
-    
-    return rssList.reduce((acc, rss) => {
-      const cat = (rss.category || "general").trim().toLowerCase();
+    const filtered = rssList.filter(rss => 
+      rss.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (rss.category && rss.category.toLowerCase().includes(searchQuery.toLowerCase()))
+    );
 
-      // Initialize category array if missing
-      if (!acc[cat]) {
-        acc[cat] = [];
-        counts[cat] = 0;
-      }
-
-      // Only push to array if we haven't hit 4 items for this group yet
-      if (counts[cat] < 4) {
-        acc[cat].push(rss);
-        counts[cat]++;
-      }
-
+    return filtered.reduce((acc, rss) => {
+      const cat = rss.category || "General";
+      if (!acc[cat]) acc[cat] = [];
+      acc[cat].push(rss);
       return acc;
     }, {});
-  }, [rssList]);
-  /* -------------------------------------------------------- */
+  }, [rssList, searchQuery]);
 
-  if (loading) return <div className="pref-container"><div className="loader-main"></div></div>;
+  const categories = useMemo(() => {
+    return ["All", ...new Set(rssList.map(r => r.category || "General"))];
+  }, [rssList]);
+
+  if (loading) return (
+    <div className="pref-container">
+      <div className="mesh-gradient"></div>
+      <div className="loader-main"><div className="spinner"></div></div>
+    </div>
+  );
 
   return (
     <div className="pref-container">
+      <div className="floating-bg-wrapper">
+        <FloatingLines
+          enabledWaves={['top', 'middle', 'bottom']}
+          lineCount={[8, 12, 16]}
+          lineDistance={[6, 5, 4]}
+          bendRadius={4.0}
+          bendStrength={-0.3}
+          interactive={true}
+          parallax={true}
+          linesGradient={['#ce3cae', '#61518b', '#2563eb']}
+        />
+      </div>
       <div className="mesh-gradient"></div>
       
       <div className="pref-content">
+        {/* Navigation */}
         <nav className="pref-nav">
           <div className="logo-area">
             <span className="logo-icon">✨</span>
             <span className="logo-text">elinity.in</span>
           </div>
-          <button className="logout-pill" onClick={() => supabase.auth.signOut().then(() => navigate("/login"))}>
-            Logout
-          </button>
+          <div className="nav-right">
+            <span className="selection-counter">{selected.length} sources selected</span>
+            <SpecularButton
+              size="sm"
+              radius={20}
+              tint="#ffffff"
+              tintOpacity={0.05}
+              blur={4}
+              textColor="#f87171"
+              lineColor="#f87171"
+              baseColor="#7f1d1d"
+              intensity={0.8}
+              onClick={() => supabase.auth.signOut().then(() => navigate("/login"))}
+            >
+              Logout
+            </SpecularButton>
+          </div>
         </nav>
 
+        {/* Header */}
         <header className="pref-header">
-          <h1 className="pref-title">News Preferences</h1>
-          <p className="pref-subtitle">Select the sources that fuel your daily briefing.</p>
-          
-          <div className="pref-header-actions">
-            <div className="search-wrapper">
-              <input
-                type="text"
-                placeholder="Search name or category..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pref-search-input"
-              />
-              {searching && <span className="search-spinner">⏳</span>}
-            </div>
-
-            <div className="add-source-wrapper">
-              <button 
-                type="button"
-                className="toggle-add-btn" 
-                onClick={() => setShowAddForm(!showAddForm)}
-              >
-                {showAddForm ? "✕ Close Form" : "+ Add Custom Source"}
-              </button>
-            </div>
-          </div>
-
-          {showAddForm && (
-            <form onSubmit={handleAddSource} className="add-source-form">
-              <div className="form-group">
-                <input 
-                  type="text" 
-                  placeholder="Source Name (e.g., TechCrunch)" 
-                  value={newSourceName}
-                  onChange={(e) => setNewSourceName(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <input 
-                  type="url" 
-                  placeholder="RSS Feed URL" 
-                  value={newSourceUrl}
-                  onChange={(e) => setNewSourceUrl(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <input 
-                  type="text" 
-                  placeholder="Category (Optional)" 
-                  value={newSourceCategory}
-                  onChange={(e) => setNewSourceCategory(e.target.value)}
-                />
-              </div>
-              <button type="submit" className="submit-source-btn" disabled={addingSource}>
-                {addingSource ? "Adding..." : "Add & Select Source"}
-              </button>
-            </form>
-          )}
+          <h1 className="pref-title">Curate Your Briefing</h1>
+          <p className="pref-subtitle">Select the intel streams that feed your daily AI digest.</p>
         </header>
 
+        {/* Search & Category Filter Bar */}
+        <div className="filter-toolbar">
+          <div className="search-box">
+            <span className="search-icon">🔍</span>
+            <input 
+              type="text" 
+              placeholder="Search sources (e.g. Tech, BBC...)" 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="search-input"
+            />
+            {searchQuery && (
+              <button className="clear-search" onClick={() => setSearchQuery("")}>×</button>
+            )}
+          </div>
+
+          <div className="category-pills">
+            {categories.map(cat => (
+              <button
+                key={cat}
+                className={`category-pill ${activeCategory === cat ? "active" : ""}`}
+                onClick={() => setActiveCategory(cat)}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Categories Stack */}
         <div className="categories-stack">
-          {Object.keys(grouped).length === 0 ? (
-            <div className="no-results">No sources found matching "{searchQuery}"</div>
-          ) : (
-            Object.entries(grouped).map(([category, feeds]) => (
-              <section key={category} className="pref-section">
-                <div className="section-header">
-                  <h3 className="category-title">{category}</h3>
-                  <div className="divider-line"></div>
-                </div>
-                <div className="sources-grid">
-                  {feeds.map((rss) => (
-                    <button
-                      key={rss.id}
-                      className={`source-card ${selected.includes(rss.id) ? "is-selected" : ""}`}
-                      onClick={() => toggleRSS(rss.id)}
+          {Object.entries(grouped)
+            .filter(([category]) => activeCategory === "All" || category === activeCategory)
+            .map(([category, feeds]) => {
+              const allCatSelected = feeds.every(f => selected.includes(f.id));
+              return (
+                <section key={category} className="pref-section">
+                  <div className="section-header">
+                    <h3 className="category-title">{category}</h3>
+                    <button 
+                      className="cat-toggle-btn"
+                      onClick={() => toggleCategoryAll(feeds)}
                     >
-                      <span className="source-name">{rss.name}</span>
-                      {selected.includes(rss.id) && <span className="check-icon">✓</span>}
+                      {allCatSelected ? "Deselect All" : "Select All"}
                     </button>
-                  ))}
-                </div>
-              </section>
-            ))
+                    <div className="divider-line"></div>
+                  </div>
+                  <div className="sources-grid">
+                    {feeds.map((rss) => {
+                      const isSelected = selected.includes(rss.id);
+                      return (
+                        <button
+                          key={rss.id}
+                          className={`source-card ${isSelected ? "is-selected" : ""}`}
+                          onClick={() => toggleRSS(rss.id)}
+                        >
+                          <div className="source-info">
+                            <span className="source-name">{rss.name}</span>
+                            <span className="source-meta">{rss.category || "Feed"}</span>
+                          </div>
+                          <div className={`checkbox-indicator ${isSelected ? "checked" : ""}`}>
+                            {isSelected && <span className="check-icon">✓</span>}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+              );
+          })}
+
+          {Object.keys(grouped).length === 0 && (
+            <div className="empty-state">
+              <p>No sources found matching "{searchQuery}"</p>
+            </div>
           )}
         </div>
 
-        <div className="action-footer">
-          <div className="status-container">
-            {status && <span className="status-toast">{status}</span>}
+        {/* Sticky Floating Glass Footer */}
+        <div className="pref-footer">
+          <div className="footer-glass">
+            <div className="status-container-inline">
+              {status ? <span className="status-toast">{status}</span> : <span className="footer-hint">Changes apply instantly</span>}
+            </div>
+            <SpecularButton
+              size="md"
+              radius={14}
+              tint="#6366f1"
+              tintOpacity={0.2}
+              blur={8}
+              textColor="#ffffff"
+              lineColor="#818cf8"
+              baseColor="#4f46e5"
+              intensity={1.2}
+              disabled={saving}
+              onClick={savePreferences}
+            >
+              {saving ? <div className="spinner"></div> : "Save Preferences"}
+            </SpecularButton>
           </div>
-          <button className="save-btn-large" onClick={savePreferences} disabled={saving}>
-            {saving ? <div className="spinner"></div> : "Update My Feed"}
-          </button>
-          <p className="footer-note">Changes take effect on your next digest generation.</p>
         </div>
       </div>
     </div>
