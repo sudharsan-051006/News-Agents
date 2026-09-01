@@ -1,0 +1,8 @@
+.floating-lines-container {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  opacity: 0.35; /* Softens the light rays so they don't wash out the text */
+  pointer-events: none;
+}
