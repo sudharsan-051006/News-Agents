@@ -1,15 +1,28 @@
-/* Signup.css */
+/* Prevent any accidental page overflow */
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden; /* Locks the window so scrollbars won't appear on desktop */
+  background: #0a0a0c;
+  font-family: 'Inter', system-ui, sans-serif;
+  color: white;
+}
+
+* {
+  box-sizing: border-box;
+}
 
 .signup-page {
-  min-height: 100vh;
+  width: 100%;
+  height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #0a0a0c; /* Deep obsidian background */
+  background: #0a0a0c;
   overflow: hidden;
   position: relative;
-  font-family: 'Inter', system-ui, sans-serif;
-  color: white;
 }
 
 /* Moving background blobs for depth */
@@ -37,8 +50,8 @@
   position: relative;
   z-index: 10;
   width: 100%;
-  max-width: 420px;
-  padding: 20px;
+  max-width: 380px; /* Slightly tightened width to fit laptop heights better */
+  padding: 10px;
 }
 
 .glass-card {
@@ -46,15 +59,15 @@
   backdrop-filter: blur(15px);
   -webkit-backdrop-filter: blur(15px);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 24px;
-  padding: 40px;
+  border-radius: 20px;
+  padding: 28px; /* Slightly compacted padding so it doesn't force a vertical scrollbar */
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
 }
 
 .title {
-  font-size: 2rem;
+  font-size: 1.75rem;
   font-weight: 700;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   text-align: center;
   background: linear-gradient(to right, #fff, #9ca3af);
   -webkit-background-clip: text;
@@ -64,20 +77,20 @@
 .subtitle {
   text-align: center;
   color: #9ca3af;
-  margin-bottom: 32px;
+  font-size: 0.9rem;
+  margin-bottom: 20px;
 }
 
 .modern-input {
   width: 100%;
-  padding: 14px 16px;
-  margin-bottom: 16px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
   background: rgba(0, 0, 0, 0.2);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
+  border-radius: 10px;
   color: white;
-  font-size: 1rem;
+  font-size: 0.95rem;
   transition: all 0.3s ease;
-  box-sizing: border-box;
 }
 
 .modern-input:focus {
@@ -89,16 +102,16 @@
 
 .submit-btn {
   width: 100%;
-  padding: 14px;
+  padding: 12px;
   background: #6366f1;
   color: white;
   border: none;
-  border-radius: 12px;
-  font-size: 1rem;
+  border-radius: 10px;
+  font-size: 0.95rem;
   font-weight: 600;
   cursor: pointer;
   transition: transform 0.2s, background 0.2s;
-  margin-top: 10px;
+  margin-top: 6px;
 }
 
 .submit-btn:hover {
@@ -111,10 +124,10 @@
 }
 
 .footer-text {
-  margin-top: 24px;
+  margin-top: 16px;
   text-align: center;
   color: #9ca3af;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
 }
 
 .login-link {
@@ -130,9 +143,76 @@
 .error-message {
   color: #ef4444;
   background: rgba(239, 68, 68, 0.1);
-  padding: 10px;
-  border-radius: 8px;
-  font-size: 0.85rem;
+  padding: 8px;
+  border-radius: 6px;
+  font-size: 0.8rem;
   text-align: center;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
+}
+
+/* =========================================
+   SPLIT SCREEN LAYOUT (LAPTOP & DESKTOP)
+   ========================================= */
+/* Split screen layout container */
+.split-login-container {
+  display: flex;
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+  background-color: #0a0a0c;
+  position: relative; /* Required for absolute blobs */
+}
+
+/* Form side styling */
+.login-form-side {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 2;
+  background: transparent; /* Let background blobs show through */
+  padding: 1rem;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Drift wall side styling */
+.drift-wall-side {
+  flex: 1;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  background: transparent; /* Removes the hard box background */
+  z-index: 2;
+}
+
+/* =========================================
+   MOBILE RESPONSIVE STYLES (Screens <= 768px)
+   ========================================= */
+@media (max-width: 768px) {
+  html, body {
+    overflow-y: auto; /* Re-enable natural mobile scrolling */
+    height: auto;
+  }
+
+  .split-login-container {
+    flex-direction: column;
+    height: auto;
+    overflow: visible;
+  }
+
+  .login-form-side {
+    width: 100%;
+    min-height: 100vh;
+    padding: 1rem;
+    overflow: visible;
+  }
+
+  .drift-wall-side {
+    display: block;
+    width: 100%;
+    height: 300px;
+    order: -1; /* Puts drift wall at the top on mobile */
+  }
 }
