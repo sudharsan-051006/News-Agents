@@ -11,6 +11,8 @@ import {
   WebGLRenderer
 } from 'three';
 
+import * as THREE from "three";    
+
 import './FloatingLines.css';
 
 const vertexShader = `
