@@ -3,7 +3,7 @@ import { supabase } from "../supabaseClient";
 import { useNavigate } from "react-router-dom";
 import SpecularButton from "../components/SpecularButton";
 import FloatingLines from "../components/FloatingLines";
-import "../styles/Preferences.css";
+import "../styles/Perferences.css";
 
 function Preferences() {
   const navigate = useNavigate();
