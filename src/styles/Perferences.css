@@ -23,6 +23,31 @@
 
 
 /* =========================================================
+   IMPORTANT: PAGE SCROLLING
+========================================================= */
+
+html,
+body,
+#root {
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+body {
+  min-height: 100vh;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+
+/* =========================================================
    GLOBAL
 ========================================================= */
 
@@ -30,13 +55,31 @@
   box-sizing: border-box;
 }
 
+button,
+input {
+  font-family: inherit;
+}
+
+
+/* =========================================================
+   MAIN CONTAINER
+========================================================= */
+
 .pref-container {
   position: relative;
 
   width: 100%;
   min-height: 100vh;
 
+  /*
+    IMPORTANT:
+    Do NOT use height: 100vh here.
+    Do NOT use overflow: hidden here.
+    Otherwise the page can become impossible to scroll.
+  */
+
   overflow-x: hidden;
+  overflow-y: visible;
 
   background:
     radial-gradient(
@@ -65,7 +108,10 @@
 .background-layer {
   position: fixed;
 
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
 
   width: 100%;
   height: 100vh;
@@ -78,14 +124,18 @@
 }
 
 
-/* IMPORTANT:
-   FloatingLines needs an actual size.
+/*
+   FloatingLines container
+
+   It is fixed ONLY for the background.
+   This does NOT affect page scrolling.
 */
 
 .floating-bg-wrapper {
   position: absolute;
 
-  inset: 0;
+  top: 0;
+  left: 0;
 
   width: 100%;
   height: 100%;
@@ -98,7 +148,9 @@
 }
 
 
-/* Make the floating component fill the screen */
+/*
+   Force FloatingLines to occupy viewport.
+*/
 
 .floating-bg-wrapper > * {
   width: 100% !important;
@@ -106,12 +158,15 @@
 }
 
 
-/* Gradient behind the lines */
+/* =========================================================
+   BACKGROUND GRADIENT
+========================================================= */
 
 .mesh-gradient {
   position: absolute;
 
-  inset: 0;
+  top: 0;
+  left: 0;
 
   width: 100%;
   height: 100%;
@@ -136,8 +191,6 @@
   pointer-events: none;
 }
 
-
-/* Darkens background while preserving effects */
 
 .dark-overlay {
   position: absolute;
@@ -168,6 +221,12 @@
   max-width: 1150px;
 
   margin: 0 auto;
+
+  /*
+    Bottom padding gives enough space
+    so the final cards aren't hidden behind
+    the Save Preferences bar.
+  */
 
   padding:
     18px
@@ -221,10 +280,13 @@
       rgba(99, 102, 241, 0.2)
     );
 
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.12);
 
   box-shadow:
-    0 0 25px rgba(168, 85, 247, 0.15);
+    0 0 25px
+    rgba(168, 85, 247, 0.15);
 }
 
 
@@ -389,7 +451,8 @@
   -webkit-backdrop-filter: blur(22px);
 
   box-shadow:
-    0 15px 45px rgba(0, 0, 0, 0.22);
+    0 15px 45px
+    rgba(0, 0, 0, 0.22);
 }
 
 
@@ -491,7 +554,8 @@
   background:
     rgba(255, 255, 255, 0.08);
 
-  color: rgba(255, 255, 255, 0.65);
+  color:
+    rgba(255, 255, 255, 0.65);
 
   cursor: pointer;
 
@@ -607,6 +671,12 @@
   flex-direction: column;
 
   gap: 42px;
+
+  /*
+    Important:
+    Don't set height.
+    Don't set overflow.
+  */
 }
 
 
@@ -899,7 +969,8 @@
 
   overflow: hidden;
 
-  color: rgba(255, 255, 255, 0.92);
+  color:
+    rgba(255, 255, 255, 0.92);
 
   font-size: 0.88rem;
 
@@ -1068,7 +1139,7 @@
 
 
 /* =========================================================
-   FOOTER
+   FIXED SAVE FOOTER
 ========================================================= */
 
 .pref-footer {
@@ -1078,7 +1149,7 @@
   right: 0;
   bottom: 0;
 
-  z-index: 50;
+  z-index: 100;
 
   display: flex;
 
@@ -1094,7 +1165,8 @@
   background:
     linear-gradient(
       to top,
-      rgba(7, 7, 11, 0.9),
+      rgba(7, 7, 11, 0.95),
+      rgba(7, 7, 11, 0.65),
       transparent
     );
 }
@@ -1113,6 +1185,8 @@
 
   max-width: 700px;
 
+  min-height: 60px;
+
   padding:
     10px;
 
@@ -1123,7 +1197,7 @@
   border-radius: 17px;
 
   background:
-    rgba(18, 18, 25, 0.78);
+    rgba(18, 18, 25, 0.86);
 
   backdrop-filter: blur(22px);
   -webkit-backdrop-filter: blur(22px);
@@ -1224,6 +1298,8 @@
 ========================================================= */
 
 .loading-screen {
+  min-height: 100vh;
+
   display: flex;
 
   align-items: center;
@@ -1334,7 +1410,9 @@
 
     align-items: center;
 
-    padding: 10px 12px;
+    padding:
+      10px
+      12px;
   }
 
 
@@ -1363,15 +1441,24 @@
   }
 
 
+  /*
+     On desktop the footer becomes part of the
+     normal document flow.
+
+     Therefore the page itself remains scrollable.
+  */
+
   .pref-footer {
     position: relative;
 
+    left: auto;
+    right: auto;
     bottom: auto;
 
     padding:
       55px
       0
-      20px;
+      30px;
 
     background: none;
 
@@ -1380,7 +1467,7 @@
 
 
   .footer-glass {
-    max-width: 700px;
+    pointer-events: auto;
   }
 }
 
@@ -1416,7 +1503,7 @@
     padding:
       14px
       14px
-      135px;
+      140px;
   }
 
 
