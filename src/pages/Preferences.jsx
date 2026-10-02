@@ -3,7 +3,7 @@ import { supabase } from "../supabaseClient";
 import { useNavigate } from "react-router-dom";
 import SpecularButton from "../components/SpecularButton"; // Adjust path if needed
 import "../styles/Perferences.css";
-import FloatingLines from "../components/FloatingLines";
+// import FloatingLines from "../components/FloatingLines";
 
 function Preferences() {
   const navigate = useNavigate();
@@ -100,7 +100,7 @@ function Preferences() {
 
   return (
     <div className="pref-container">
-      <div className="floating-bg-wrapper">
+      {/* <div className="floating-bg-wrapper">
         <FloatingLines
           enabledWaves={['top', 'middle', 'bottom']}
           lineCount={[8, 12, 16]}
@@ -111,7 +111,7 @@ function Preferences() {
           parallax={true}
           linesGradient={['#ce3cae', '#61518b', '#2563eb']}
         />
-      </div>
+      </div> */}
       <div className="mesh-gradient"></div>
       
       <div className="pref-content">
