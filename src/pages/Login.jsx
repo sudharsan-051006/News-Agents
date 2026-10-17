@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "../supabaseClient";
 import { useNavigate, Link } from "react-router-dom";
-import "../styles/Signup.css"; // Reuse the same CSS file for consistency
+import DriftWall from "../components/DriftWall.jsx"; // Adjust the path if DriftWall is in a different folder
+import "../styles/Signup.css";
 
 function Login() {
   const navigate = useNavigate();
@@ -10,6 +11,28 @@ function Login() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [message, setMessage] = useState(null);
+  const [resetSent, setResetSent] = useState(false);
+  
+  // 1. State to hold drift items fetched from Supabase
+  const [driftItems, setDriftItems] = useState([]);
+
+  // 2. Fetch items from Supabase table on component mount
+  useEffect(() => {
+    const fetchDriftItems = async () => {
+      const { data, error } = await supabase
+        .from("drift_items") // Replace with your actual Supabase table name
+        .select("image, title, href"); // Select the columns matching DriftWall's expected shape
+
+      if (error) {
+        console.error("Error fetching drift items:", error.message);
+      } else if (data && data.length > 0) {
+        setDriftItems(data);
+      }
+    };
+
+    fetchDriftItems();
+  }, []);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -24,62 +47,119 @@ function Login() {
     if (error) {
       setError(error.message);
     } else {
-      navigate("/preferences");
+      navigate("/dashboard");
+    }
+
+    setLoading(false);
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email) {
+      setError("Please enter your email first.");
+      return;
+    }
+
+    if (loading || resetSent) return;
+
+    setLoading(true);
+    setError(null);
+    setMessage(null);
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: "https://www.elinity.in/updatepassword",
+    });
+
+    if (error) {
+      setError(error.message);
+    } else {
+      setMessage("Password reset email sent! Check your inbox.");
+      setResetSent(true);
     }
 
     setLoading(false);
   };
 
   return (
-    <div className="signup-page">
-      {/* Background decorative blobs */}
+    <div className="split-login-container">
       <div className="blob blob-1"></div>
       <div className="blob blob-2"></div>
 
-      <div className="card-wrapper">
-        <div className="glass-card">
-          <div className="card-content">
-            <h2 className="title">Welcome Back</h2>
-            <p className="subtitle">Enter your details to sign in</p>
+      {/* Left Side: Login Form */}
+      <div className="login-form-side">
+        <div className="card-wrapper">
+          <div className="glass-card">
+            <div className="card-content">
+              <h2 className="title">Welcome Back</h2>
+              <p className="subtitle">Enter your details to sign in</p>
 
-            <form onSubmit={handleLogin} className="signup-form">
-              <div className="input-group">
-                <input
-                  type="email"
-                  placeholder="Email address"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="modern-input"
-                />
-              </div>
+              <form onSubmit={handleLogin} className="signup-form">
+                <div className="input-group">
+                  <input
+                    type="email"
+                    placeholder="Email address"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="modern-input"
+                  />
+                </div>
 
-              <div className="input-group">
-                <input
-                  type="password"
-                  placeholder="Password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="modern-input"
-                />
-              </div>
+                <div className="input-group">
+                  <input
+                    type="password"
+                    placeholder="Password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="modern-input"
+                  />
+                </div>
 
-              {error && <p className="error-message">{error}</p>}
+                <p
+                  style={{
+                    textAlign: "right",
+                    cursor: loading || resetSent ? "not-allowed" : "pointer",
+                    fontSize: "14px",
+                    color: loading || resetSent ? "#9ca3af" : "#4f46e5",
+                    pointerEvents: loading || resetSent ? "none" : "auto",
+                  }}
+                  onClick={!loading && !resetSent ? handleForgotPassword : undefined}
+                >
+                  {resetSent ? "Email Sent ✔" : "Forgot Password?"}
+                </p>
 
-              <button type="submit" disabled={loading} className="submit-btn">
-                {loading ? <span className="loader"></span> : "Sign In"}
-              </button>
-            </form>
+                {error && <p className="error-message">{error}</p>}
+                {message && <p style={{ color: "green" }}>{message}</p>}
 
-            <p className="footer-text">
-              Don’t have an account?{" "}
-              <Link to="/signup" className="login-link">
-                Sign Up
-              </Link>
-            </p>
+                <button type="submit" disabled={loading} className="submit-btn">
+                  {loading ? <span className="loader"></span> : "Sign In"}
+                </button>
+              </form>
+
+              <p className="footer-text">
+                Don’t have an account?{" "}
+                <Link to="/signup" className="login-link">
+                  Sign Up
+                </Link>
+              </p>
+            </div>
           </div>
         </div>
+      </div>
+
+      {/* Right Side: Drift Wall Animation (Passes database items) */}
+      <div className="drift-wall-side">
+        <DriftWall
+          items={driftItems.length > 0 ? driftItems : undefined} // Falls back to default items if empty/loading
+          columns={4}
+          tileWidth={180}
+          tileHeight={120}
+          gap={16}
+          speed={36}
+          direction="up"
+          pauseOnHover={true}
+          overlayColor="#0a0a0c"
+        />
       </div>
     </div>
   );
