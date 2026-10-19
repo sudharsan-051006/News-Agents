@@ -1,0 +1,50 @@
+/* =========================================================
+   FONTS — the ONE place to change fonts for the whole app.
+
+   1. Pick fonts at https://fonts.google.com and copy the
+      "@import" URL into the line below (replace the old one).
+   2. Update the two variables underneath with the same names.
+
+   --font-sans  : body text, buttons, inputs, labels
+   --font-serif : big headlines (titles, "Welcome Back", etc.)
+
+   Want ONE font everywhere? Set both variables to the same font.
+========================================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0..60,500;0..60,600;1,0..60,400&display=swap');
+
+:root {
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-serif: 'Source Serif 4', Georgia, serif;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3,
+.article-title,
+.featured-headline {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.article-summary,
+.news-description {
+  font-family: var(--font-sans);
+  line-height: 1.65;
+}
+
+.category,
+.timestamp,
+.reading-time,
+.nav-link {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+}

@@ -273,8 +273,8 @@ function Preferences() {
             interactive={true}
             parallax={true}
             linesGradient={[
-              "#ce3cae",
-              "#61518b",
+              "gold",
+              "black",
               "#2563eb",
             ]}
           />
@@ -308,9 +308,9 @@ function Preferences() {
             interactive={true}
             parallax={true}
             linesGradient={[
-              "#ce3cae",
-              "#61518b",
-              "#2563eb",
+              "gold",
+              "black",
+              "green",
             ]}
           />
         </div>

@@ -62,8 +62,8 @@ uniform vec3 backgroundColor;
 uniform bool lightMode;
 
 const vec3 BLACK = vec3(0.0);
-const vec3 PINK  = vec3(233.0, 71.0, 245.0) / 255.0;
-const vec3 BLUE  = vec3(47.0,  75.0, 162.0) / 255.0;
+const vec3 PINK  = vec3(214.0, 173.0, 98.0) / 255.0; // warm gold
+const vec3 BLUE  = vec3(120.0, 95.0, 55.0) / 255.0; // muted bronze
 
 mat2 rotate(float r) {
   return mat2(cos(r), sin(r), -sin(r), cos(r));
@@ -256,7 +256,7 @@ export default function FloatingLines({
   parallax = true,
   parallaxStrength = 0.2,
   mixBlendMode = 'screen',
-  backgroundColor = '#000000',
+  backgroundColor = '#111210',
   lightMode = false
 }) {
   const containerRef = useRef(null);

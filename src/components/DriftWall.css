@@ -1,3 +1,9 @@
+/* =========================================================
+   DRIFT WALL — restyled to match Elinity editorial dark theme
+   Structure/animation rules are unchanged; only the visuals.
+   Tip: in Login.jsx / Signup.jsx you can tweak props such as
+   dim={0.7} radius={20} for a different feel.
+========================================================= */
 .drift-wall {
   position: relative;
   width: 100%;
@@ -8,12 +14,13 @@
   --dw-tile-w: 200px;
   --dw-tile-h: 132px;
   --dw-gap: 18px;
-  --dw-radius: 14px;
+  --dw-radius: 20px;
   --dw-lift: 64px;
-  --dw-dim: 0.55;
+  --dw-dim: 0.6;
   --dw-gray: 0;
-  --dw-overlay: #060010;
+  --dw-overlay: #08090c;
   --dw-edge: 40%;
+  --dw-accent: #ff6a3d;
   -webkit-mask-image:
     radial-gradient(ellipse 78% 82% at 50% 46%, #000 var(--dw-edge), transparent 100%),
     linear-gradient(to top, #000 var(--dw-edge), transparent 100%);
@@ -65,14 +72,27 @@
   display: block;
   border-radius: var(--dw-radius);
   overflow: hidden;
-  background: #0b0b12;
+  background: #11141a;
   opacity: var(--dw-dim);
   transform: translateZ(0);
   pointer-events: none;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.09),
+    0 10px 30px -14px rgba(0, 0, 0, 0.8);
   transition:
-    transform 0.42s cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 0.42s cubic-bezier(0.22, 1, 0.36, 1),
-    box-shadow 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+    transform 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* soft top highlight for a glassy edge */
+.drift-wall__inner::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.1), transparent 35%);
+  pointer-events: none;
 }
 
 .drift-wall__tile img {
@@ -80,8 +100,11 @@
   height: 100%;
   object-fit: cover;
   display: block;
-  filter: grayscale(var(--dw-gray)) saturate(0.92);
-  transition: filter 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+  filter: grayscale(var(--dw-gray)) saturate(0.85) contrast(1.05);
+  transform: scale(1.04);
+  transition:
+    filter 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.8s cubic-bezier(0.22, 1, 0.36, 1);
   user-select: none;
   -webkit-user-drag: none;
 }
@@ -89,22 +112,28 @@
 .drift-wall__overlay {
   position: absolute;
   inset: 0;
-  background: var(--dw-overlay);
-  opacity: 0.42;
+  background: linear-gradient(180deg, transparent 30%, var(--dw-overlay) 130%), var(--dw-overlay);
+  background-blend-mode: normal;
+  opacity: 0.38;
   pointer-events: none;
-  transition: opacity 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: opacity 0.5s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/* active / hover */
 .drift-wall__tile.is-active .drift-wall__inner,
 .drift-wall__tile:focus-visible .drift-wall__inner {
   opacity: 1;
   transform: translateZ(var(--dw-lift));
-  box-shadow: 0 24px 60px -18px rgba(0, 0, 0, 0.7);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 106, 61, 0.7),
+    0 0 40px -8px rgba(255, 106, 61, 0.55),
+    0 30px 60px -20px rgba(0, 0, 0, 0.85);
 }
 
 .drift-wall__tile.is-active img,
 .drift-wall__tile:focus-visible img {
-  filter: grayscale(0) saturate(1.05);
+  filter: grayscale(0) saturate(1.1) contrast(1.05);
+  transform: scale(1.1);
 }
 
 .drift-wall__tile.is-active .drift-wall__overlay,
@@ -114,8 +143,8 @@
 
 .drift-wall__tile:focus-visible .drift-wall__inner {
   box-shadow:
-    0 24px 60px -18px rgba(0, 0, 0, 0.7),
-    0 0 0 2px rgba(255, 255, 255, 0.9);
+    inset 0 0 0 2px #fff,
+    0 30px 60px -20px rgba(0, 0, 0, 0.85);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -123,13 +152,8 @@
   .drift-wall__track {
     will-change: auto;
   }
+  .drift-wall__tile img { transition: none; }
 }
 
-/* Drift wall side styling */
-.drift-wall-side {
-  flex: 1;
-  height: 100%;
-  position: relative;
-  overflow: hidden;
-  background-color: #0a0a0c; /* Matches your login side background */
-}
+/* NOTE: the old duplicate ".drift-wall-side" rule was removed from this file.
+   Layout for that wrapper now lives only in Signup.css. */

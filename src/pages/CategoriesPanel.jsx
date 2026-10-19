@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft, Check, ExternalLink, FolderPlus, Globe2, Link2, LockKeyhole, Plus, RefreshCw, Trash2, X, UserPlus, UserMinus } from "lucide-react";
+import { ArrowLeft, Check, ExternalLink, FolderPlus, Globe2, Link2, LockKeyhole, Plus, RefreshCw, Trash2, X, Search } from "lucide-react";
 import { supabase } from "../supabaseClient";
 import "../styles/CategoriesPanel.css";
 
@@ -24,8 +24,6 @@ export default function CategoriesPanel({ mode = "manage", onBack, onCategorySel
   const [categories, setCategories] = useState([]);
   const [publicCategories, setPublicCategories] = useState([]);
   const [sources, setSources] = useState({});
-  const [followedCategoryIds, setFollowedCategoryIds] = useState(new Set());
-  const [followBusyId, setFollowBusyId] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -37,6 +35,9 @@ export default function CategoriesPanel({ mode = "manage", onBack, onCategorySel
   const [sourceName, setSourceName] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
   const [expandedCategory, setExpandedCategory] = useState("");
+  const [selectedRss, setSelectedRss] = useState([]);
+  const [rssSearch, setRssSearch] = useState("");
+  const [savingSelection, setSavingSelection] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true); setError("");
@@ -45,52 +46,39 @@ export default function CategoriesPanel({ mode = "manage", onBack, onCategorySel
       if (authError) throw authError;
       if (!auth?.user) throw new Error("Please sign in to manage categories.");
       setUser(auth.user);
-      const [{ data: own, error: ownError }, { data: pub, error: pubError }] = await Promise.all([
+      const [{ data: own, error: ownError }, { data: pub, error: pubError }, { data: selectedRows, error: selectedError }] = await Promise.all([
         supabase.from("categories").select("id,owner_id,name,description,visibility,created_at").eq("owner_id", auth.user.id).order("name"),
         supabase.from("categories").select("id,owner_id,name,description,visibility,created_at").eq("visibility", "public").order("name").limit(100),
+        supabase.from("user_sources").select("rss_id").eq("user_id", auth.user.id),
       ]);
       if (ownError) throw ownError;
       if (pubError) throw pubError;
+      if (selectedError) throw selectedError;
+      setSelectedRss((selectedRows || []).map(row => row.rss_id));
       const owned = own || [];
       setCategories(owned);
       setPublicCategories((pub || []).filter(c => c.owner_id !== auth.user.id));
-      const { data: follows, error: followsError } = await supabase
-        .from("category_follows")
-        .select("category_id")
-        .eq("user_id", auth.user.id);
-      if (followsError) throw followsError;
-      setFollowedCategoryIds(new Set((follows || []).map(row => row.category_id)));
       if (!selectedCategory && owned[0]) setSelectedCategory(owned[0].id);
       const ids = [...new Set([...owned, ...(pub || [])].map(c => c.id))];
       if (ids.length) {
-        // Load the new many-to-many mappings.
-        const { data: links, error: linksError } = await supabase
-          .from("category_sources")
-          .select("category_id,rss_id,rss(id,name,rss_url,category)")
-          .in("category_id", ids);
+        const [{ data: links, error: linksError }, { data: categorizedFeeds, error: feedsError }] = await Promise.all([
+          supabase.from("category_sources").select("category_id,rss_id,rss(id,name,rss_url,category)").in("category_id", ids),
+          // Compatibility fallback: older RSS rows may have category_id but no category_sources row yet.
+          supabase.from("rss").select("id,name,rss_url,category,category_id").in("category_id", ids),
+        ]);
         if (linksError) throw linksError;
-
-        // Backward compatibility: older RSS records may still be assigned through
-        // rss.category_id and have not yet been copied into category_sources.
-        const { data: legacyFeeds, error: legacyError } = await supabase
-          .from("rss")
-          .select("id,name,rss_url,category,category_id")
-          .in("category_id", ids);
-        if (legacyError) throw legacyError;
-
+        if (feedsError) throw feedsError;
         const grouped = {};
-        const seen = new Set();
         (links || []).forEach(link => {
           if (!link.rss) return;
           const feed = { ...link.rss, rss_id: link.rss_id };
-          (grouped[link.category_id] ||= []).push(feed);
-          seen.add(`${link.category_id}:${link.rss_id}`);
+          const list = (grouped[link.category_id] ||= []);
+          if (!list.some(item => item.id === feed.id)) list.push(feed);
         });
-        (legacyFeeds || []).forEach(feed => {
-          const key = `${feed.category_id}:${feed.id}`;
-          if (seen.has(key)) return;
-          (grouped[feed.category_id] ||= []).push({ ...feed, rss_id: feed.id });
-          seen.add(key);
+        (categorizedFeeds || []).forEach(feed => {
+          if (!feed.category_id) return;
+          const list = (grouped[feed.category_id] ||= []);
+          if (!list.some(item => item.id === feed.id)) list.push(feed);
         });
         Object.values(grouped).forEach(list => list.sort((a, b) => (a.name || "").localeCompare(b.name || "")));
         setSources(grouped);
@@ -100,6 +88,50 @@ export default function CategoriesPanel({ mode = "manage", onBack, onCategorySel
   }, [selectedCategory]);
 
   useEffect(() => { load(); }, [load]);
+
+  const visiblePublicCategories = publicCategories.map(category => {
+    const categorySources = (sources[category.id] || []).filter(source => {
+      const term = rssSearch.trim().toLowerCase();
+      return !term || `${source.name || ""} ${source.rss_url || ""} ${source.category || ""}`.toLowerCase().includes(term);
+    });
+    return { ...category, visibleSources: categorySources };
+  }).filter(category => !rssSearch.trim() || category.visibleSources.length > 0 || `${category.name} ${category.description || ""}`.toLowerCase().includes(rssSearch.trim().toLowerCase()));
+
+  function toggleRssSource(rssId) {
+    setSelectedRss(current => current.includes(rssId)
+      ? current.filter(id => id !== rssId)
+      : [...current, rssId]);
+  }
+
+  function toggleCategorySources(feedList) {
+    const ids = feedList.map(feed => feed.id).filter(Boolean);
+    if (!ids.length) return;
+    const allSelected = ids.every(id => selectedRss.includes(id));
+    setSelectedRss(current => allSelected
+      ? current.filter(id => !ids.includes(id))
+      : [...new Set([...current, ...ids])]);
+  }
+
+  async function saveRssSelection() {
+    setError(""); setSuccess(""); setSavingSelection(true);
+    try {
+      const { data: auth, error: authError } = await supabase.auth.getUser();
+      if (authError) throw authError;
+      if (!auth?.user) throw new Error("Please sign in to save your RSS selections.");
+      const { error: deleteError } = await supabase.from("user_sources").delete().eq("user_id", auth.user.id);
+      if (deleteError) throw deleteError;
+      if (selectedRss.length) {
+        const rows = [...new Set(selectedRss)].map(rss_id => ({ user_id: auth.user.id, rss_id }));
+        const { error: insertError } = await supabase.from("user_sources").insert(rows);
+        if (insertError) throw insertError;
+      }
+      setSuccess(`Saved ${selectedRss.length} selected RSS source${selectedRss.length === 1 ? "" : "s"}. Your news feed will use these sources.`);
+    } catch (e) {
+      setError(e.message || "Could not save RSS selections.");
+    } finally {
+      setSavingSelection(false);
+    }
+  }
 
   async function createCategory(event) {
     event.preventDefault(); setError(""); setSuccess("");
@@ -153,26 +185,6 @@ export default function CategoriesPanel({ mode = "manage", onBack, onCategorySel
     finally { setBusy(false); }
   }
 
-  async function toggleFollow(category) {
-    if (!user) { setError("Please sign in to follow categories."); return; }
-    setError(""); setSuccess(""); setFollowBusyId(category.id);
-    const isFollowing = followedCategoryIds.has(category.id);
-    try {
-      if (isFollowing) {
-        const { error: deleteError } = await supabase.from("category_follows").delete().eq("category_id", category.id).eq("user_id", user.id);
-        if (deleteError) throw deleteError;
-        setFollowedCategoryIds(current => { const next = new Set(current); next.delete(category.id); return next; });
-        setSuccess(`Unfollowed “${category.name}”.`);
-      } else {
-        const { error: insertError } = await supabase.from("category_follows").insert({ category_id: category.id, user_id: user.id });
-        if (insertError) throw insertError;
-        setFollowedCategoryIds(current => new Set([...current, category.id]));
-        setSuccess(`Following “${category.name}”.`);
-      }
-    } catch (e) { setError(e.message || "Could not update category follow status."); }
-    finally { setFollowBusyId(""); }
-  }
-
   async function deleteCategory(category) {
     if (!window.confirm(`Delete your category “${category.name}”? This will not delete the RSS feed records.`)) return;
     setError(""); setSuccess("");
@@ -195,7 +207,7 @@ export default function CategoriesPanel({ mode = "manage", onBack, onCategorySel
   return <section className="categories-panel">
     <header className="categories-panel-header">
       <div className="categories-heading-icon"><FolderPlus size={22}/></div>
-      <div className="categories-heading-copy"><span className="eyebrow">EXPLORE TOPICS</span><h1>{mode === "public" ? "Public Categories" : "Manage Categories"}</h1><p>{mode === "public" ? "Discover public collections made by other readers. These categories are view-only." : "Create your own categories and organize RSS links. Public categories from other readers are suggested below, but only their owners can edit them."}</p></div>
+      <div className="categories-heading-copy"><span className="eyebrow">EXPLORE TOPICS</span><h1>{mode === "public" ? "Public Categories" : "Manage Categories"}</h1><p>{mode === "public" ? "Choose individual RSS links from public categories to personalize your news feed." : "Create your own categories and organize RSS links. Public categories from other readers are suggested below, but only their owners can edit them."}</p></div>
       <button type="button" className="categories-refresh" onClick={load} title="Refresh categories"><RefreshCw size={17}/></button>
       {onBack && <button type="button" className="categories-back" onClick={onBack}><ArrowLeft size={16}/> Back to news</button>}
     </header>
@@ -222,9 +234,29 @@ export default function CategoriesPanel({ mode = "manage", onBack, onCategorySel
           <button className="category-primary-button" disabled={busy || !categories.length}><Link2 size={16}/>{busy ? "Verifying and adding…" : "Verify and add link"}</button>
         </form>
       </div>}
-      <section className="public-category-section"><div className="public-category-heading"><div><span className="category-card-kicker"><Globe2 size={15}/> COMMUNITY COLLECTIONS</span><h2>{mode === "public" ? "Explore public categories" : "Suggested public categories"}</h2><p>Public categories created by other users. Follow them to save the collection; only its owner can edit or delete it.</p></div><span className="category-count-badge">{publicCategories.length}</span></div>
-        {!publicCategories.length ? <div className="category-empty compact"><Globe2 size={22}/><strong>No public categories to suggest yet</strong><span>When other readers publish categories, they will appear here.</span></div> : <div className="public-category-grid">{publicCategories.map(cat => <article className="public-category-card" key={cat.id}><div className="public-category-card-top"><span className="public-category-icon"><Globe2 size={18}/></span><span className="visibility-chip public"><Globe2 size={12}/> public</span></div><h3>{cat.name}</h3><p>{cat.description || "A public collection shared by another reader."}</p><div className="public-category-card-footer"><span><LockKeyhole size={13}/> Owner-editable only</span><div className="public-category-actions"><button type="button" className="category-follow-button" disabled={followBusyId === cat.id} onClick={() => toggleFollow(cat)}>{followedCategoryIds.has(cat.id) ? <><UserMinus size={14}/>{followBusyId === cat.id ? "Updating…" : "Unfollow"}</> : <><UserPlus size={14}/>{followBusyId === cat.id ? "Updating…" : "Follow"}</>}</button>{onCategorySelect && <button type="button" onClick={() => onCategorySelect(cat)}>Explore <ExternalLink size={13}/></button>}</div></div></article>)}</div>}
-      </section>
+      {mode === "public" ? <section className="public-category-section rss-selection-section">
+        <div className="public-category-heading"><div><span className="category-card-kicker"><Globe2 size={15}/> COMMUNITY COLLECTIONS</span><h2>Choose your RSS sources</h2><p>Select the exact RSS links you want. Selected sources are saved to your personalized news feed.</p></div><span className="category-count-badge">{selectedRss.length} selected</span></div>
+        <label className="rss-source-search"><Search size={17}/><input value={rssSearch} onChange={event => setRssSearch(event.target.value)} placeholder="Search public categories or RSS links…"/><span>{publicCategories.reduce((total, cat) => total + (sources[cat.id] || []).length, 0)} links</span></label>
+        {!visiblePublicCategories.length ? <div className="category-empty compact"><Globe2 size={22}/><strong>No matching public RSS links</strong><span>Try another search, or ask a category owner to add RSS links to their public collection.</span></div> : <div className="public-category-grid">{visiblePublicCategories.map(cat => {
+          const feedList = cat.visibleSources || [];
+          const allSelected = feedList.length > 0 && feedList.every(feed => selectedRss.includes(feed.id));
+          return <article className="public-category-card public-category-select-card" key={cat.id}>
+            <div className="public-category-card-top"><span className="public-category-icon"><Globe2 size={18}/></span><span className="visibility-chip public"><Globe2 size={12}/> public</span></div>
+            <h3>{cat.name}</h3><p>{cat.description || "A public collection shared by another reader."}</p>
+            <div className="public-rss-list">{feedList.length ? feedList.map(feed => {
+              const isSelected = selectedRss.includes(feed.id);
+              return <button type="button" key={feed.id} className={`public-rss-option${isSelected ? " selected" : ""}`} aria-pressed={isSelected} onClick={() => toggleRssSource(feed.id)}>
+                <span className={`rss-selection-check${isSelected ? " checked" : ""}`}>{isSelected ? <Check size={13}/> : null}</span>
+                <span className="public-rss-option-copy"><strong>{feed.name || "RSS source"}</strong><small>{feed.rss_url || "RSS URL unavailable"}</small></span>
+              </button>;
+            }) : <div className="public-rss-empty">No RSS links have been added to this public category yet.</div>}</div>
+            {feedList.length > 0 && <div className="public-category-card-footer"><span>{feedList.filter(feed => selectedRss.includes(feed.id)).length} of {feedList.length} selected</span><button type="button" onClick={() => toggleCategorySources(feedList)}>{allSelected ? "Deselect all" : "Select all"}</button></div>}
+          </article>;
+        })}</div>}
+        <div className="rss-selection-savebar"><span><strong>{selectedRss.length}</strong> RSS source{selectedRss.length === 1 ? "" : "s"} selected</span><button type="button" className="category-primary-button" onClick={saveRssSelection} disabled={savingSelection}>{savingSelection ? "Saving selections…" : "Save selected sources"}</button></div>
+      </section> : <section className="public-category-section"><div className="public-category-heading"><div><span className="category-card-kicker"><Globe2 size={15}/> COMMUNITY COLLECTIONS</span><h2>Suggested public categories</h2><p>Public categories created by other users. Only their owners can edit or delete them.</p></div><span className="category-count-badge">{publicCategories.length}</span></div>
+        {!publicCategories.length ? <div className="category-empty compact"><Globe2 size={22}/><strong>No public categories to suggest yet</strong><span>When other readers publish categories, they will appear here.</span></div> : <div className="public-category-grid">{publicCategories.map(cat => <article className="public-category-card" key={cat.id}><div className="public-category-card-top"><span className="public-category-icon"><Globe2 size={18}/></span><span className="visibility-chip public"><Globe2 size={12}/> public</span></div><h3>{cat.name}</h3><p>{cat.description || "A public collection shared by another reader."}</p><div className="public-category-card-footer"><span><LockKeyhole size={13}/> Read-only</span></div></article>)}</div>}
+      </section>}
     </>}
   </section>;
 }
