@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../supabaseClient";
 import { useNavigate, Link } from "react-router-dom";
-import AuthWall from "../components/AuthWall.jsx";
+import AuthWall from "../components/Authwall.jsx";
 import "../styles/Signup.css";
 
 function Login() {
