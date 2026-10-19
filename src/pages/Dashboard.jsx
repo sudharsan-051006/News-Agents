@@ -1,30 +1,46 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { NavLink } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   Bookmark,
   BookOpen,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Cpu,
+  Film,
   FolderCog,
   Globe2,
   Image as ImageIcon,
+  Layers,
   LayoutDashboard,
+  LockKeyhole,
   LogOut,
-  Menu,
+  MapPin,
   Newspaper,
+  Plus,
   Search,
   Sparkles,
   TrendingUp,
+  Trophy,
   X,
   Zap,
 } from "lucide-react";
 import { supabase } from "../supabaseClient";
 import CategoriesPanel from "./CategoriesPanel";
 import "../styles/Dashboard.css";
+import "../styles/DashboardNav.css";
 
 const TOPICS = ["geopolitics", "local", "movies", "sports", "tech"];
 const SAVED_KEY = "elinity_saved_news";
+
+const TOPIC_ICONS = {
+  "All topics": Layers,
+  geopolitics: Globe2,
+  local: MapPin,
+  movies: Film,
+  sports: Trophy,
+  tech: Cpu,
+};
 
 function formatTime(value) {
   if (!value) return "Recently";
@@ -67,39 +83,53 @@ function readSaved() {
   }
 }
 
-function SidebarLink({ icon: Icon, children, onClick, active, to }) {
-  const className = `dashboard-nav-link${active ? " active" : ""}`;
-  if (to) {
-    return (
-      <NavLink to={to} onClick={onClick} className={({ isActive }) => `${className}${isActive ? " active" : ""}`}>
-        <Icon size={18} strokeWidth={1.8} /> <span>{children}</span>
-      </NavLink>
-    );
-  }
-  return (
-    <button type="button" className={className} onClick={onClick}>
-      <Icon size={18} strokeWidth={1.8} /> <span>{children}</span>
-    </button>
-  );
-}
-
 function StoryCard({ story, onOpen, saved, onToggleSave }) {
   return (
     <article className="story-card">
-      <button className="story-image-button" type="button" onClick={() => onOpen(story)} aria-label={`Read ${story.title}`}>
-        {story.image ? (
-          <img className="story-image" src={story.image} alt="" loading="lazy" onError={(event) => { event.currentTarget.style.display = "none"; }} />
-        ) : <span className="story-image story-image-placeholder"><ImageIcon size={28} /></span>}
-      </button>
+      <div className="story-image-wrapper">
+        <button
+          className="story-image-button"
+          type="button"
+          onClick={() => onOpen(story)}
+          aria-label={`Read ${story.title}`}
+        >
+          {story.image ? (
+            <img
+              className="story-image"
+              src={story.image}
+              alt=""
+              loading="lazy"
+              onError={(event) => {
+                event.currentTarget.style.display = "none";
+              }}
+            />
+          ) : (
+            <span className="story-image story-image-placeholder">
+              <ImageIcon size={28} />
+            </span>
+          )}
+        </button>
+
+        <button
+          type="button"
+          className={`icon-button save-button${saved ? " is-saved" : ""}`}
+          onClick={() => onToggleSave(story)}
+          aria-label={saved ? "Remove bookmark" : "Bookmark story"}
+        >
+          <Bookmark size={16} fill={saved ? "currentColor" : "none"} />
+        </button>
+      </div>
+
       <div className="story-card-content">
-        <div className="story-meta-top">
-          <span>{story.category}</span>
-          <button type="button" className={`icon-button save-button${saved ? " is-saved" : ""}`} onClick={() => onToggleSave(story)} aria-label={saved ? "Remove bookmark" : "Bookmark story"}>
-            <Bookmark size={16} fill={saved ? "currentColor" : "none"} />
-          </button>
+        <button type="button" className="story-title-button" onClick={() => onOpen(story)}>
+          {story.title}
+        </button>
+
+        <div className="story-byline">
+          <span>{story.author}</span>
+          <span className="meta-dot">·</span>
+          <span>{story.time}</span>
         </div>
-        <button type="button" className="story-title-button" onClick={() => onOpen(story)}>{story.title}</button>
-        <div className="story-byline"><span>{story.author}</span><span className="meta-dot">·</span><span>{story.time}</span></div>
       </div>
     </article>
   );
@@ -110,7 +140,8 @@ export default function Dashboard() {
   const [categoryView, setCategoryView] = useState("feed");
   const [activeTopic, setActiveTopic] = useState("All topics");
   const [search, setSearch] = useState("");
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const accountRef = useRef(null);
   const [savedStories, setSavedStories] = useState(readSaved);
   const savedIds = useMemo(() => savedStories.map((s) => s.id), [savedStories]);
   const [journals, setJournals] = useState([]);
@@ -130,6 +161,13 @@ export default function Dashboard() {
   const [mediaError, setMediaError] = useState("");
   const [mediaSuccess, setMediaSuccess] = useState("");
   const [copiedJournalId, setCopiedJournalId] = useState(null);
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordBusy, setPasswordBusy] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
+  const [passwordSuccess, setPasswordSuccess] = useState("");
 
   // Persist saved stories to localStorage whenever they change.
   useEffect(() => {
@@ -139,6 +177,29 @@ export default function Dashboard() {
       console.error("Could not save to localStorage:", error);
     }
   }, [savedStories]);
+
+  // Close the account menu on outside click or Escape.
+  useEffect(() => {
+    if (!accountOpen) return undefined;
+    const onPointerDown = (event) => {
+      if (accountRef.current && !accountRef.current.contains(event.target)) setAccountOpen(false);
+    };
+    const onKeyDown = (event) => { if (event.key === "Escape") setAccountOpen(false); };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [accountOpen]);
+
+  // Lock page scroll behind any open dialog (important on phones).
+  useEffect(() => {
+    if (!(showAddMedia || showChangePassword || selectedStory)) return undefined;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previous; };
+  }, [showAddMedia, showChangePassword, selectedStory]);
 
   const toggleSave = (story) =>
     setSavedStories((current) =>
@@ -225,6 +286,57 @@ export default function Dashboard() {
     return () => { cancelled = true; };
   }, [categoryView]);
 
+  async function handleChangePassword(event) {
+    event.preventDefault();
+    setPasswordError("");
+    setPasswordSuccess("");
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setPasswordError("Please fill in all fields.");
+      return;
+    }
+    if (newPassword.length < 8) {
+      setPasswordError("New password must be at least 8 characters.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError("New passwords do not match.");
+      return;
+    }
+    if (currentPassword === newPassword) {
+      setPasswordError("Choose a password different from your current one.");
+      return;
+    }
+
+    setPasswordBusy(true);
+    try {
+      const { data, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
+      const user = data.user;
+      if (!user?.email) throw new Error("Please sign in again.");
+
+      // Verify the current password.
+      const { error: verifyError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: currentPassword,
+      });
+      if (verifyError) throw new Error("Your current password is incorrect.");
+
+      // Update the password through Supabase Auth.
+      const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+      if (updateError) throw updateError;
+
+      setPasswordSuccess("Password changed successfully.");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (error) {
+      setPasswordError(error.message || "Unable to change your password.");
+    } finally {
+      setPasswordBusy(false);
+    }
+  }
+
   const stories = useMemo(() => {
     let result = [...storiesData];
     if (activeTab === "Trending") result = [...result].reverse();
@@ -250,9 +362,23 @@ export default function Dashboard() {
   }, [slideCount, carouselPaused]);
 
   const pickTopic = (topic) => {
+    setCategoryView("feed");
     setActiveTopic(topic);
     setActiveTab("Stories for You");
-    setMobileNavOpen(false);
+  };
+
+  const openAddMedia = () => {
+    setShowAddMedia(true);
+    setMediaError("");
+    setMediaSuccess("");
+    setAccountOpen(false);
+  };
+
+  const openChangePassword = () => {
+    setShowChangePassword(true);
+    setPasswordError("");
+    setPasswordSuccess("");
+    setAccountOpen(false);
   };
 
   async function handleAddMedia(event) {
@@ -368,118 +494,164 @@ export default function Dashboard() {
     saved: "Saved Newsletters",
   };
 
+  const displayName = userEmail === "Reader" ? "Your account" : userEmail?.split("@")[0] || "Your account";
+  const initial = (userEmail?.[0] || "R").toUpperCase();
+
+  const navItems = [
+    { key: "feed", label: "Dashboard", icon: LayoutDashboard },
+    { key: "journals", label: "Journals", icon: BookOpen },
+    { key: "public", label: "Public", icon: Globe2 },
+    { key: "manage", label: "Manage", icon: FolderCog },
+  ];
+
   return (
     <div className="news-dashboard">
-      <aside className={`dashboard-sidebar${mobileNavOpen ? " mobile-open" : ""}`} aria-label="Dashboard sidebar">
-        <div className="brand-lockup">
-          {/* <span className="brand-mark" aria-hidden="true"><Sparkles size={21} /></span> */}
-          
+      {/* ---------- Top navigation ---------- */}
+      <header className="app-header">
+        <div className="app-header-inner">
+          <button type="button" className="nav-brand" onClick={() => setCategoryView("feed")} aria-label="Elinity home">
+            <span className="brand-name">
+              <span className="special-e" aria-label="E">
+                <span></span>
+                <span></span>
+                <span></span>
+              </span>
+              linity
+            </span>
+          </button>
 
-<span className="brand-name">
-  <span className="special-e" aria-label="E">
-    <span></span>
-    <span></span>
-    <span></span>
-  </span>
-  linity
-</span>
-
-
-          <button type="button" className="icon-button sidebar-close" onClick={() => setMobileNavOpen(false)} aria-label="Close navigation"><X size={20} /></button>
-        </div>
-
-        <nav className="primary-nav" aria-label="Main navigation">
-          <SidebarLink icon={LayoutDashboard} active={categoryView === "feed"} onClick={() => { setCategoryView("feed"); setMobileNavOpen(false); }}>Dashboard</SidebarLink>
-          <SidebarLink icon={BookOpen} active={categoryView === "journals"} onClick={() => { setCategoryView("journals"); setMobileNavOpen(false); }}>Journals</SidebarLink>
-          <SidebarLink icon={Newspaper} onClick={() => { setShowAddMedia(true); setMediaError(""); setMediaSuccess(""); setMobileNavOpen(false); }}>Add RSS Source</SidebarLink>
-        </nav>
-
-        <div className="sidebar-divider" />
-        <section className="topic-section" aria-labelledby="topic-nav-heading">
-          <div id="topic-nav-heading" className="topic-nav-label">Explore topics</div>
-          <nav className="topic-nav" aria-label="Topic navigation">
-            <button type="button" className={`topic-link topic-feature-link${categoryView === "public" ? " active" : ""}`} aria-current={categoryView === "public" ? "page" : undefined} onClick={() => { setCategoryView("public"); setMobileNavOpen(false); }}>
-              <Globe2 size={17} aria-hidden="true" /><span>Public Categories</span>
-            </button>
-            <button type="button" className={`topic-link topic-feature-link${categoryView === "manage" ? " active" : ""}`} aria-current={categoryView === "manage" ? "page" : undefined} onClick={() => { setCategoryView("manage"); setMobileNavOpen(false); }}>
-              <FolderCog size={17} aria-hidden="true" /><span>Manage Categories</span>
-            </button>
-            <div className="topic-nav-subheading">QUICK FILTERS</div>
-            <div className="topic-filter-list">
-              {TOPICS.map((topic) => {
-                const isActive = categoryView === "feed" && activeTopic === topic;
-                return <button key={topic} type="button" className={`topic-link${isActive ? " active" : ""}`} aria-current={isActive ? "true" : undefined} onClick={() => { setCategoryView("feed"); pickTopic(topic); }}><span className="topic-link-text">{topic}</span></button>;
-              })}
-            </div>
+          <nav className="nav-links" aria-label="Main navigation">
+            {navItems.map(({ key, label, icon: Icon }) => (
+              <button
+                key={key}
+                type="button"
+                className={`nav-link${categoryView === key ? " active" : ""}`}
+                aria-current={categoryView === key ? "page" : undefined}
+                onClick={() => setCategoryView(key)}
+              >
+                <Icon size={16} strokeWidth={1.8} />
+                <span>{label}</span>
+              </button>
+            ))}
           </nav>
-        </section>
 
-        <div className="sidebar-bottom">
-          <SidebarLink icon={Bookmark} active={categoryView === "saved"} onClick={() => { setCategoryView("saved"); setMobileNavOpen(false); }}>Saved Newsletters{savedStories.length ? ` (${savedStories.length})` : ""}</SidebarLink>
-          <button type="button" className="dashboard-nav-link" onClick={handleLogout}><LogOut size={18} strokeWidth={1.8} /><span>Log out</span></button>
-          <div className="user-mini">
-            <div className="avatar" aria-hidden="true">{(userEmail?.[0] || "R").toUpperCase()}</div>
-            <div className="user-mini-copy"><strong>{userEmail === "Reader" ? "Your account" : userEmail?.split("@")[0] || "Your account"}</strong><span>Personal news feed</span></div>
+          <div className="nav-spacer" />
+          <button type="button" className="nav-add-button" onClick={openAddMedia}>
+            <Plus size={15} /> <span>Add source</span>
+          </button>
+
+          <button
+            type="button"
+            className={`nav-icon-button${categoryView === "saved" ? " active" : ""}`}
+            onClick={() => setCategoryView("saved")}
+            aria-label={`Saved newsletters (${savedStories.length})`}
+          >
+            <Bookmark size={18} />
+            {savedStories.length > 0 && <span className="nav-badge">{savedStories.length}</span>}
+          </button>
+
+          <div className="account-menu" ref={accountRef}>
+            <button
+              type="button"
+              className="account-trigger"
+              onClick={() => setAccountOpen((open) => !open)}
+              aria-haspopup="menu"
+              aria-expanded={accountOpen}
+              aria-label="Account menu"
+            >
+              <span className="avatar" aria-hidden="true">{initial}</span>
+              <ChevronDown size={14} className={accountOpen ? "flip" : ""} />
+            </button>
+
+            {accountOpen && (
+              <div className="account-popover" role="menu">
+                <div className="account-head">
+                  <span className="avatar" aria-hidden="true">{initial}</span>
+                  <div>
+                    <strong>{displayName}</strong>
+                    <span>{userEmail && userEmail !== "Reader" ? userEmail : "Personal news feed"}</span>
+                  </div>
+                </div>
+                <div className="account-divider" />
+                <button type="button" role="menuitem" className="account-item account-item-mobile" onClick={openAddMedia}>
+                  <Newspaper size={16} /> Add RSS Source
+                </button>
+                <button type="button" role="menuitem" className="account-item" onClick={() => { setCategoryView("saved"); setAccountOpen(false); }}>
+                  <Bookmark size={16} /> Saved Newsletters{savedStories.length ? ` (${savedStories.length})` : ""}
+                </button>
+                <button type="button" role="menuitem" className="account-item" onClick={openChangePassword}>
+                  <LockKeyhole size={16} /> Change Password
+                </button>
+                <div className="account-divider" />
+                <button type="button" role="menuitem" className="account-item danger" onClick={handleLogout}>
+                  <LogOut size={16} /> Log out
+                </button>
+              </div>
+            )}
           </div>
         </div>
-      </aside>
 
-      {mobileNavOpen && <button type="button" className="mobile-backdrop" onClick={() => setMobileNavOpen(false)} aria-label="Close navigation" />}
+        {/* Sub-bar: feed views + quick topic filters */}
+        <div className="app-subbar">
+          {categoryView === "feed" ? (
+            <>
+              <nav className="feed-tabs" aria-label="News feed views">
+                {["Stories for You", "Trending", "Your Topics"].map((tab) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    className={`feed-tab${activeTab === tab ? " active" : ""}`}
+                    onClick={() => { setActiveTab(tab); if (tab === "Your Topics") setActiveTopic("All topics"); }}
+                  >
+                    {tab === "Trending" && <TrendingUp size={15} />}
+                    {tab === "Your Topics" && <Zap size={15} />}
+                    {tab}
+                  </button>
+                ))}
+              </nav>
+              <div className="subbar-chips" role="group" aria-label="Quick topic filters">
+                {["All topics", ...TOPICS].map((topic) => {
+                  const TopicIcon = TOPIC_ICONS[topic];
+                  return (
+                    <button
+                      key={topic}
+                      type="button"
+                      className={`chip${activeTopic === topic ? " active" : ""}`}
+                      aria-pressed={activeTopic === topic}
+                      onClick={(event) => {
+                        pickTopic(topic);
+                        event.currentTarget.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+                      }}
+                    >
+                      {TopicIcon && <TopicIcon size={14} strokeWidth={2} />}
+                      {topic}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          ) : (
+            <div className="category-topbar-label">{topbarLabels[categoryView]}</div>
+          )}
+        </div>
+      </header>
 
       <main className="dashboard-main">
-        <header className="dashboard-topbar">
-          
-<button
-  type="button"
-  className="icon-button mobile-menu-button"
-  onClick={() => setMobileNavOpen(true)}
-  aria-label="Open navigation"
-  aria-expanded={mobileNavOpen}
->
-  <span className="menu-monogram" aria-hidden="true">
-    <span></span>
-    <span></span>
-    <span></span>
-  </span>
-</button>
-
-          {categoryView === "feed" ? (
-            <nav className="feed-tabs" aria-label="News feed views">
-              {["Stories for You", "Trending", "Your Topics"].map((tab) => <button key={tab} type="button" className={`feed-tab${activeTab === tab ? " active" : ""}`} onClick={() => { setActiveTab(tab); if (tab === "Your Topics") setActiveTopic("All topics"); }}>{tab === "Trending" && <TrendingUp size={15} />}{tab === "Your Topics" && <Zap size={15} />}{tab}</button>)}
-            </nav>
-          ) : <div className="category-topbar-label">{topbarLabels[categoryView]}</div>}
-        </header>
-
         {categoryView === "journals" ? (
-
-        <div className="dashboard-content">
-          <section className="feed-column">
-            <div className="section-heading">
-              <div>
-                <span className="eyebrow">FROM OUR DATABASE</span>
-                <h2>Journals</h2>
+          <div className="dashboard-content">
+            <section className="feed-column">
+              <div className="section-heading">
+                <div>
+                  <span className="eyebrow">FROM OUR DATABASE</span>
+                  <h2>Journals</h2>
+                </div>
+                <span className="story-count">{journals.length} sources</span>
               </div>
 
-              <span className="story-count">
-                {journals.length} sources
-              </span>
-            </div>
+              {journalsLoading && <div className="empty-state"><p>Loading journals...</p></div>}
+              {journalsError && <div className="empty-state"><p>{journalsError}</p></div>}
 
-            {journalsLoading && (
-              <div className="empty-state">
-                <p>Loading journals...</p>
-              </div>
-            )}
-
-            {journalsError && (
-              <div className="empty-state">
-                <p>{journalsError}</p>
-              </div>
-            )}
-
-            {!journalsLoading &&
-              !journalsError &&
-              journals.length === 0 && (
+              {!journalsLoading && !journalsError && journals.length === 0 && (
                 <div className="empty-state">
                   <Newspaper size={28} />
                   <h3>No journals yet</h3>
@@ -487,63 +659,38 @@ export default function Dashboard() {
                 </div>
               )}
 
-            {!journalsLoading &&
-              !journalsError &&
-              journals.length > 0 && (
+              {!journalsLoading && !journalsError && journals.length > 0 && (
                 <div className="story-grid">
                   {journals.map((j) => {
                     let host = j.rss_url;
-
                     try {
-                      host = new URL(j.rss_url).hostname.replace(
-                        /^www\./i,
-                        ""
-                      );
+                      host = new URL(j.rss_url).hostname.replace(/^www\./i, "");
                     } catch {
                       // Keep the raw URL if it is invalid.
                     }
-
                     return (
                       <article className="story-card" key={j.id}>
                         <div className="story-card-content">
-                          <div className="story-meta-top">
-                            <span>{j.category || "General"}</span>
-                          </div>
-
+                          <div className="story-meta-top"><span>{j.category || "General"}</span></div>
                           <button
                             type="button"
                             className="story-title-button"
                             title="Click to copy RSS link"
                             onClick={async () => {
                               try {
-                                await navigator.clipboard.writeText(
-                                  j.rss_url
-                                );
-
+                                await navigator.clipboard.writeText(j.rss_url);
                                 setCopiedJournalId(j.id);
-
-                                setTimeout(() => {
-                                  setCopiedJournalId(null);
-                                }, 2000);
+                                setTimeout(() => setCopiedJournalId(null), 2000);
                               } catch (error) {
-                                console.error(
-                                  "Failed to copy RSS link:",
-                                  error
-                                );
+                                console.error("Failed to copy RSS link:", error);
                               }
                             }}
                           >
                             {j.name}
                           </button>
-
-                          <div className="story-byline">
-                            <span>{host}</span>
-                          </div>
-
+                          <div className="story-byline"><span>{host}</span></div>
                           {copiedJournalId === j.id && (
-                            <div className="journal-copy-feedback">
-                              <span>✓</span> RSS link copied
-                            </div>
+                            <div className="journal-copy-feedback"><span>✓</span> RSS link copied</div>
                           )}
                         </div>
                       </article>
@@ -551,9 +698,8 @@ export default function Dashboard() {
                   })}
                 </div>
               )}
-          </section>
-        </div>
-
+            </section>
+          </div>
         ) : categoryView === "saved" ? (
           <div className="dashboard-content">
             <section className="feed-column">
@@ -601,7 +747,6 @@ export default function Dashboard() {
                           style={{ backgroundImage: `linear-gradient(90deg, rgba(0, 0, 0, .88), rgba(0, 0, 0, .1)), linear-gradient(0deg, rgba(0, 0, 0, .6), transparent 70%)${story.image ? `, url("${story.image}")` : ""}` }}
                         >
                           <div className="featured-content">
-                            {/* <span className="featured-kicker"><Sparkles size={14} /> FEATURED STORY</span> */}
                             <h1>{story.title}</h1>
                             <div className="featured-byline"><span className="author-avatar">E</span><span>{story.author}</span><span>·</span><span>{story.category}</span></div>
                             <p>{story.summary}</p>
@@ -629,7 +774,6 @@ export default function Dashboard() {
               )}
 
               <div className="section-heading"><div><span className="eyebrow">CURATED FOR YOU</span><h2>{activeTopic === "All topics" ? activeTab : activeTopic}</h2></div><span className="story-count">{stories.length} stories <ChevronRight size={15} /></span></div>
-              {activeTab === "Your Topics" && <div className="topic-pills">{["All topics", ...TOPICS].map((topic) => <button key={topic} type="button" className={`topic-pill${activeTopic === topic ? " active" : ""}`} onClick={() => setActiveTopic(topic)}>{topic}</button>)}</div>}
               {loadingStories && <div className="empty-state"><p>Loading articles from Supabase...</p></div>}
               <div className="story-grid">{stories.map((story) => <StoryCard key={story.id} story={story} onOpen={setSelectedStory} saved={savedIds.includes(story.id)} onToggleSave={toggleSave} />)}</div>
               {!loadingStories && stories.length === 0 && <div className="empty-state"><Search size={28} /><h3>No articles found</h3><p>{search ? "Try another search or choose a different topic." : "No cached news is available for your selected sources yet."}</p><button type="button" onClick={() => { setSearch(""); setActiveTopic("All topics"); }}>Clear filters</button></div>}
@@ -647,6 +791,29 @@ export default function Dashboard() {
         )}
       </main>
 
+      {/* ---------- Mobile bottom dock ---------- */}
+      <nav className="bottom-dock" aria-label="Quick navigation">
+        {navItems.map(({ key, label, icon: Icon }) => (
+          <button
+            key={key}
+            type="button"
+            className={`dock-item${categoryView === key ? " active" : ""}`}
+            onClick={() => setCategoryView(key)}
+          >
+            <Icon size={20} strokeWidth={1.8} />
+            <span>{label}</span>
+          </button>
+        ))}
+        <button
+          type="button"
+          className={`dock-item${categoryView === "saved" ? " active" : ""}`}
+          onClick={() => setCategoryView("saved")}
+        >
+          <Bookmark size={20} strokeWidth={1.8} />
+          <span>Saved</span>
+        </button>
+      </nav>
+
       {showAddMedia && <div className="reader-backdrop add-media-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !mediaBusy) setShowAddMedia(false); }}>
         <section className="article-reader add-media-dialog" role="dialog" aria-modal="true" aria-labelledby="add-media-title">
           <button className="reader-close icon-button" type="button" onClick={() => setShowAddMedia(false)} aria-label="Close add source form" disabled={mediaBusy}><X size={21} /></button>
@@ -663,6 +830,56 @@ export default function Dashboard() {
           </div>
         </section>
       </div>}
+
+      {showChangePassword && (
+        <div
+          className="reader-backdrop add-media-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !passwordBusy) setShowChangePassword(false);
+          }}
+        >
+          <section className="article-reader add-media-dialog password-dialog" role="dialog" aria-modal="true" aria-labelledby="password-dialog-title">
+            <button
+              type="button"
+              className="reader-close icon-button"
+              onClick={() => setShowChangePassword(false)}
+              aria-label="Close change password"
+              disabled={passwordBusy}
+            >
+              <X size={21} />
+            </button>
+
+            <div className="reader-body">
+              <span className="eyebrow">ACCOUNT SECURITY</span>
+              <h2 id="password-dialog-title">Change Password</h2>
+              <p>Choose a new password to secure your account.</p>
+
+              <form className="add-media-form change-password-form" onSubmit={handleChangePassword}>
+                <label>
+                  Current password
+                  <input type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} autoComplete="current-password" required />
+                </label>
+                <label>
+                  New password
+                  <input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} autoComplete="new-password" minLength={8} required />
+                </label>
+                <label>
+                  Confirm new password
+                  <input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} autoComplete="new-password" minLength={8} required />
+                </label>
+
+                {passwordError && <p className="add-media-message error" role="alert">{passwordError}</p>}
+                {passwordSuccess && <p className="add-media-message success" role="status">{passwordSuccess}</p>}
+
+                <button type="submit" className="read-featured-button add-media-submit password-submit" disabled={passwordBusy}>
+                  {passwordBusy ? "Updating password..." : "Update Password"}
+                </button>
+              </form>
+            </div>
+          </section>
+        </div>
+      )}
 
       {selectedStory && <div className="reader-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedStory(null); }}>
         <section className="article-reader" role="dialog" aria-modal="true" aria-labelledby="reader-title">

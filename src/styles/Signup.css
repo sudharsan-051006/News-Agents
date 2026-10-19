@@ -235,21 +235,43 @@
     flex-direction: column;
     height: auto;
     min-height: 100vh;
-    overflow: visible;
+    min-height: 100dvh;
+    overflow-x: hidden;
+    overflow-y: visible;
   }
-  .login-form-side {
-    width: 100%;
-    min-height: 100vh;
-    overflow: visible;
-    padding: 1.25rem;
-  }
+
+  /* Wall becomes a compact header band that fades into the page */
   .drift-wall-side {
     order: -1;
-    width: 100%;
     flex: none;
-    height: 240px;
+    width: 100%;
+    height: clamp(220px, 34dvh, 320px);
+    pointer-events: none; /* decorative on touch: no accidental taps or scroll traps */
+    background: radial-gradient(ellipse 80% 90% at 50% 15%, rgba(225, 29, 46, 0.2), transparent 70%);
     -webkit-mask-image: linear-gradient(180deg, #000 55%, transparent 100%);
     mask-image: linear-gradient(180deg, #000 55%, transparent 100%);
   }
-  .title { font-size: 2.4rem; }
+  /* Replace the desktop radial mask with a simple side fade */
+  .drift-wall-side .drift-wall {
+    -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 14%, #000 86%, transparent 100%);
+    mask-image: linear-gradient(90deg, transparent 0, #000 14%, #000 86%, transparent 100%);
+    -webkit-mask-composite: source-over;
+    mask-composite: add;
+  }
+
+  /* Card tucks up under the fade, no dead gap */
+  .login-form-side {
+    z-index: 3;
+    flex: 1 0 auto;
+    width: 100%;
+    min-height: 0;
+    height: auto;
+    align-items: flex-start;
+    margin-top: -56px;
+    padding: 0 1.25rem calc(2rem + env(safe-area-inset-bottom));
+    overflow: visible;
+  }
+  .glass-card { padding: 28px 22px 24px; border-radius: 24px; }
+  .title { font-size: 2.3rem; }
+  .subtitle { margin-bottom: 22px; }
 }

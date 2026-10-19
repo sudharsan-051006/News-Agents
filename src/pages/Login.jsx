@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../supabaseClient";
 import { useNavigate, Link } from "react-router-dom";
-import DriftWall from "../components/DriftWall.jsx"; // Adjust the path if DriftWall is in a different folder
+import AuthWall from "../components/AuthWall.jsx";
 import "../styles/Signup.css";
 
 function Login() {
@@ -149,17 +149,7 @@ function Login() {
 
       {/* Right Side: Drift Wall Animation (Passes database items) */}
       <div className="drift-wall-side">
-        <DriftWall
-          items={driftItems.length > 0 ? driftItems : undefined} // Falls back to default items if empty/loading
-          columns={4}
-          tileWidth={180}
-          tileHeight={120}
-          gap={16}
-          speed={36}
-          direction="up"
-          pauseOnHover={true}
-          overlayColor="#0a0a0c"
-        />
+        <AuthWall items={driftItems} />
       </div>
     </div>
   );
