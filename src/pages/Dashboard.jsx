@@ -129,6 +129,7 @@ export default function Dashboard() {
   const [mediaBusy, setMediaBusy] = useState(false);
   const [mediaError, setMediaError] = useState("");
   const [mediaSuccess, setMediaSuccess] = useState("");
+  const [copiedJournalId, setCopiedJournalId] = useState(null);
 
   // Persist saved stories to localStorage whenever they change.
   useEffect(() => {
@@ -372,7 +373,18 @@ export default function Dashboard() {
       <aside className={`dashboard-sidebar${mobileNavOpen ? " mobile-open" : ""}`} aria-label="Dashboard sidebar">
         <div className="brand-lockup">
           {/* <span className="brand-mark" aria-hidden="true"><Sparkles size={21} /></span> */}
-          <span className="brand-name"><span style={{ fontWeight: "bold", color: "Red", fontFamily: "Lucida Console" }}>E</span>linity</span>
+          
+
+<span className="brand-name">
+  <span className="special-e" aria-label="E">
+    <span></span>
+    <span></span>
+    <span></span>
+  </span>
+  linity
+</span>
+
+
           <button type="button" className="icon-button sidebar-close" onClick={() => setMobileNavOpen(false)} aria-label="Close navigation"><X size={20} /></button>
         </div>
 
@@ -416,7 +428,21 @@ export default function Dashboard() {
 
       <main className="dashboard-main">
         <header className="dashboard-topbar">
-          <button type="button" className="icon-button mobile-menu-button" onClick={() => setMobileNavOpen(true)} aria-label="Open menu"><Menu size={22} /></button>
+          
+<button
+  type="button"
+  className="icon-button mobile-menu-button"
+  onClick={() => setMobileNavOpen(true)}
+  aria-label="Open navigation"
+  aria-expanded={mobileNavOpen}
+>
+  <span className="menu-monogram" aria-hidden="true">
+    <span></span>
+    <span></span>
+    <span></span>
+  </span>
+</button>
+
           {categoryView === "feed" ? (
             <nav className="feed-tabs" aria-label="News feed views">
               {["Stories for You", "Trending", "Your Topics"].map((tab) => <button key={tab} type="button" className={`feed-tab${activeTab === tab ? " active" : ""}`} onClick={() => { setActiveTab(tab); if (tab === "Your Topics") setActiveTopic("All topics"); }}>{tab === "Trending" && <TrendingUp size={15} />}{tab === "Your Topics" && <Zap size={15} />}{tab}</button>)}
@@ -425,34 +451,109 @@ export default function Dashboard() {
         </header>
 
         {categoryView === "journals" ? (
-          <div className="dashboard-content">
-            <section className="feed-column">
-              <div className="section-heading">
-                <div><span className="eyebrow">FROM OUR DATABASE</span><h2>Journals</h2></div>
-                <span className="story-count">{journals.length} sources</span>
+
+        <div className="dashboard-content">
+          <section className="feed-column">
+            <div className="section-heading">
+              <div>
+                <span className="eyebrow">FROM OUR DATABASE</span>
+                <h2>Journals</h2>
               </div>
-              {journalsLoading && <div className="empty-state"><p>Loading journals...</p></div>}
-              {journalsError && <div className="empty-state"><p>{journalsError}</p></div>}
-              {!journalsLoading && !journalsError && journals.length === 0 && (
-                <div className="empty-state"><Newspaper size={28} /><h3>No journals yet</h3><p>No RSS sources exist in the database.</p></div>
+
+              <span className="story-count">
+                {journals.length} sources
+              </span>
+            </div>
+
+            {journalsLoading && (
+              <div className="empty-state">
+                <p>Loading journals...</p>
+              </div>
+            )}
+
+            {journalsError && (
+              <div className="empty-state">
+                <p>{journalsError}</p>
+              </div>
+            )}
+
+            {!journalsLoading &&
+              !journalsError &&
+              journals.length === 0 && (
+                <div className="empty-state">
+                  <Newspaper size={28} />
+                  <h3>No journals yet</h3>
+                  <p>No RSS sources exist in the database.</p>
+                </div>
               )}
-              <div className="story-grid">
-                {journals.map((j) => {
-                  let host = j.rss_url;
-                  try { host = new URL(j.rss_url).hostname.replace(/^www\./i, ""); } catch { /* keep raw url */ }
-                  return (
-                    <article className="story-card" key={j.id}>
-                      <div className="story-card-content">
-                        <div className="story-meta-top"><span>{j.category || "General"}</span></div>
-                        <a className="story-title-button" href={j.rss_url} target="_blank" rel="noreferrer">{j.name}</a>
-                        <div className="story-byline"><span>{host}</span></div>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            </section>
-          </div>
+
+            {!journalsLoading &&
+              !journalsError &&
+              journals.length > 0 && (
+                <div className="story-grid">
+                  {journals.map((j) => {
+                    let host = j.rss_url;
+
+                    try {
+                      host = new URL(j.rss_url).hostname.replace(
+                        /^www\./i,
+                        ""
+                      );
+                    } catch {
+                      // Keep the raw URL if it is invalid.
+                    }
+
+                    return (
+                      <article className="story-card" key={j.id}>
+                        <div className="story-card-content">
+                          <div className="story-meta-top">
+                            <span>{j.category || "General"}</span>
+                          </div>
+
+                          <button
+                            type="button"
+                            className="story-title-button"
+                            title="Click to copy RSS link"
+                            onClick={async () => {
+                              try {
+                                await navigator.clipboard.writeText(
+                                  j.rss_url
+                                );
+
+                                setCopiedJournalId(j.id);
+
+                                setTimeout(() => {
+                                  setCopiedJournalId(null);
+                                }, 2000);
+                              } catch (error) {
+                                console.error(
+                                  "Failed to copy RSS link:",
+                                  error
+                                );
+                              }
+                            }}
+                          >
+                            {j.name}
+                          </button>
+
+                          <div className="story-byline">
+                            <span>{host}</span>
+                          </div>
+
+                          {copiedJournalId === j.id && (
+                            <div className="journal-copy-feedback">
+                              <span>✓</span> RSS link copied
+                            </div>
+                          )}
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+          </section>
+        </div>
+
         ) : categoryView === "saved" ? (
           <div className="dashboard-content">
             <section className="feed-column">
