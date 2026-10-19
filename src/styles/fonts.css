@@ -11,40 +11,45 @@
    Want ONE font everywhere? Set both variables to the same font.
 ========================================================= */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0..60,500;0..60,600;1,0..60,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
 :root {
-  --font-sans: 'Inter', system-ui, sans-serif;
-  --font-serif: 'Source Serif 4', Georgia, serif;
+  --font-sans: 'Manrope', sans-serif;
+  --font-display: 'Space Grotesk', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
 }
 
 body {
   font-family: var(--font-sans);
   font-size: 15px;
-  line-height: 1.6;
+  line-height: 1.65;
   -webkit-font-smoothing: antialiased;
 }
 
-h1, h2, h3,
-.article-title,
-.featured-headline {
-  font-family: var(--font-serif);
+h1,
+h2,
+h3,
+.featured-headline,
+.article-title {
+  font-family: var(--font-display);
   font-weight: 600;
-  line-height: 1.2;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.035em;
+  line-height: 1.15;
 }
 
 .article-summary,
-.news-description {
+.news-description,
+.article-content {
   font-family: var(--font-sans);
-  line-height: 1.65;
+  font-weight: 400;
+  line-height: 1.7;
 }
 
 .category,
 .timestamp,
 .reading-time,
-.nav-link {
-  font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 500;
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
 }

@@ -3,9 +3,9 @@ import { NavLink } from "react-router-dom";
 import {
   Activity,
   Bookmark,
+  BookOpen,
   ChevronLeft,
   ChevronRight,
-  CircleHelp,
   FolderCog,
   Globe2,
   Image as ImageIcon,
@@ -16,7 +16,6 @@ import {
   Search,
   Sparkles,
   TrendingUp,
-  Users,
   X,
   Zap,
 } from "lucide-react";
@@ -25,6 +24,7 @@ import CategoriesPanel from "./CategoriesPanel";
 import "../styles/Dashboard.css";
 
 const TOPICS = ["geopolitics", "local", "movies", "sports", "tech"];
+const SAVED_KEY = "elinity_saved_news";
 
 function formatTime(value) {
   if (!value) return "Recently";
@@ -58,6 +58,15 @@ function mapArticle(row, index) {
   };
 }
 
+function readSaved() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(SAVED_KEY) || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 function SidebarLink({ icon: Icon, children, onClick, active, to }) {
   const className = `dashboard-nav-link${active ? " active" : ""}`;
   if (to) {
@@ -85,7 +94,7 @@ function StoryCard({ story, onOpen, saved, onToggleSave }) {
       <div className="story-card-content">
         <div className="story-meta-top">
           <span>{story.category}</span>
-          <button type="button" className={`icon-button save-button${saved ? " is-saved" : ""}`} onClick={() => onToggleSave(story.id)} aria-label={saved ? "Remove bookmark" : "Bookmark story"}>
+          <button type="button" className={`icon-button save-button${saved ? " is-saved" : ""}`} onClick={() => onToggleSave(story)} aria-label={saved ? "Remove bookmark" : "Bookmark story"}>
             <Bookmark size={16} fill={saved ? "currentColor" : "none"} />
           </button>
         </div>
@@ -102,7 +111,11 @@ export default function Dashboard() {
   const [activeTopic, setActiveTopic] = useState("All topics");
   const [search, setSearch] = useState("");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [savedIds, setSavedIds] = useState([]);
+  const [savedStories, setSavedStories] = useState(readSaved);
+  const savedIds = useMemo(() => savedStories.map((s) => s.id), [savedStories]);
+  const [journals, setJournals] = useState([]);
+  const [journalsLoading, setJournalsLoading] = useState(false);
+  const [journalsError, setJournalsError] = useState("");
   const [selectedStory, setSelectedStory] = useState(null);
   const [feeds, setFeeds] = useState([]);
   const [storiesData, setStoriesData] = useState([]);
@@ -116,6 +129,22 @@ export default function Dashboard() {
   const [mediaBusy, setMediaBusy] = useState(false);
   const [mediaError, setMediaError] = useState("");
   const [mediaSuccess, setMediaSuccess] = useState("");
+
+  // Persist saved stories to localStorage whenever they change.
+  useEffect(() => {
+    try {
+      localStorage.setItem(SAVED_KEY, JSON.stringify(savedStories));
+    } catch (error) {
+      console.error("Could not save to localStorage:", error);
+    }
+  }, [savedStories]);
+
+  const toggleSave = (story) =>
+    setSavedStories((current) =>
+      current.some((s) => s.id === story.id)
+        ? current.filter((s) => s.id !== story.id)
+        : [story, ...current],
+    );
 
   const loadDashboardData = useCallback(async () => {
     setLoadingStories(true);
@@ -171,6 +200,30 @@ export default function Dashboard() {
 
   useEffect(() => { loadDashboardData(); }, [loadDashboardData]);
 
+  // Load journals (all RSS sources) from the database when the Journals view opens.
+  useEffect(() => {
+    if (categoryView !== "journals") return undefined;
+    let cancelled = false;
+    (async () => {
+      setJournalsLoading(true);
+      setJournalsError("");
+      const { data, error } = await supabase
+        .from("rss")
+        .select("id,name,category,rss_url")
+        .order("name", { ascending: true });
+      if (cancelled) return;
+      if (error) {
+        console.error("Failed to load journals:", error);
+        setJournalsError("Could not load journals. Check your Supabase access policies.");
+        setJournals([]);
+      } else {
+        setJournals(data || []);
+      }
+      setJournalsLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [categoryView]);
+
   const stories = useMemo(() => {
     let result = [...storiesData];
     if (activeTab === "Trending") result = [...result].reverse();
@@ -194,7 +247,7 @@ export default function Dashboard() {
     const timer = window.setInterval(() => setSlide((current) => (current + 1) % slideCount), 6000);
     return () => window.clearInterval(timer);
   }, [slideCount, carouselPaused]);
-  const toggleSave = (id) => setSavedIds((current) => current.includes(id) ? current.filter((savedId) => savedId !== id) : [...current, id]);
+
   const pickTopic = (topic) => {
     setActiveTopic(topic);
     setActiveTab("Stories for You");
@@ -307,18 +360,25 @@ export default function Dashboard() {
     window.location.assign("/login");
   }
 
+  const topbarLabels = {
+    public: "Public Categories",
+    manage: "Manage Categories",
+    journals: "Journals",
+    saved: "Saved Newsletters",
+  };
+
   return (
     <div className="news-dashboard">
       <aside className={`dashboard-sidebar${mobileNavOpen ? " mobile-open" : ""}`} aria-label="Dashboard sidebar">
         <div className="brand-lockup">
-          <span className="brand-mark" aria-hidden="true"><Sparkles size={21} /></span>
-          <span className="brand-name">elinity</span>
+          {/* <span className="brand-mark" aria-hidden="true"><Sparkles size={21} /></span> */}
+          <span className="brand-name"><span style={{ fontWeight: "bold", color: "Red", fontFamily: "Lucida Console" }}>E</span>linity</span>
           <button type="button" className="icon-button sidebar-close" onClick={() => setMobileNavOpen(false)} aria-label="Close navigation"><X size={20} /></button>
         </div>
 
         <nav className="primary-nav" aria-label="Main navigation">
           <SidebarLink icon={LayoutDashboard} active={categoryView === "feed"} onClick={() => { setCategoryView("feed"); setMobileNavOpen(false); }}>Dashboard</SidebarLink>
-          <SidebarLink icon={Users} onClick={() => { setFeedMessage("Journalist profiles will appear here when journalist data is connected."); setMobileNavOpen(false); }}>Journalists</SidebarLink>
+          <SidebarLink icon={BookOpen} active={categoryView === "journals"} onClick={() => { setCategoryView("journals"); setMobileNavOpen(false); }}>Journals</SidebarLink>
           <SidebarLink icon={Newspaper} onClick={() => { setShowAddMedia(true); setMediaError(""); setMediaSuccess(""); setMobileNavOpen(false); }}>Add RSS Source</SidebarLink>
         </nav>
 
@@ -343,7 +403,7 @@ export default function Dashboard() {
         </section>
 
         <div className="sidebar-bottom">
-          <SidebarLink icon={CircleHelp} onClick={() => { setFeedMessage("For support, contact your Elinity administrator."); setMobileNavOpen(false); }}>Support</SidebarLink>
+          <SidebarLink icon={Bookmark} active={categoryView === "saved"} onClick={() => { setCategoryView("saved"); setMobileNavOpen(false); }}>Saved Newsletters{savedStories.length ? ` (${savedStories.length})` : ""}</SidebarLink>
           <button type="button" className="dashboard-nav-link" onClick={handleLogout}><LogOut size={18} strokeWidth={1.8} /><span>Log out</span></button>
           <div className="user-mini">
             <div className="avatar" aria-hidden="true">{(userEmail?.[0] || "R").toUpperCase()}</div>
@@ -361,10 +421,57 @@ export default function Dashboard() {
             <nav className="feed-tabs" aria-label="News feed views">
               {["Stories for You", "Trending", "Your Topics"].map((tab) => <button key={tab} type="button" className={`feed-tab${activeTab === tab ? " active" : ""}`} onClick={() => { setActiveTab(tab); if (tab === "Your Topics") setActiveTopic("All topics"); }}>{tab === "Trending" && <TrendingUp size={15} />}{tab === "Your Topics" && <Zap size={15} />}{tab}</button>)}
             </nav>
-          ) : <div className="category-topbar-label">{categoryView === "public" ? "Public Categories" : "Manage Categories"}</div>}
+          ) : <div className="category-topbar-label">{topbarLabels[categoryView]}</div>}
         </header>
 
-        {categoryView !== "feed" ? (
+        {categoryView === "journals" ? (
+          <div className="dashboard-content">
+            <section className="feed-column">
+              <div className="section-heading">
+                <div><span className="eyebrow">FROM OUR DATABASE</span><h2>Journals</h2></div>
+                <span className="story-count">{journals.length} sources</span>
+              </div>
+              {journalsLoading && <div className="empty-state"><p>Loading journals...</p></div>}
+              {journalsError && <div className="empty-state"><p>{journalsError}</p></div>}
+              {!journalsLoading && !journalsError && journals.length === 0 && (
+                <div className="empty-state"><Newspaper size={28} /><h3>No journals yet</h3><p>No RSS sources exist in the database.</p></div>
+              )}
+              <div className="story-grid">
+                {journals.map((j) => {
+                  let host = j.rss_url;
+                  try { host = new URL(j.rss_url).hostname.replace(/^www\./i, ""); } catch { /* keep raw url */ }
+                  return (
+                    <article className="story-card" key={j.id}>
+                      <div className="story-card-content">
+                        <div className="story-meta-top"><span>{j.category || "General"}</span></div>
+                        <a className="story-title-button" href={j.rss_url} target="_blank" rel="noreferrer">{j.name}</a>
+                        <div className="story-byline"><span>{host}</span></div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+          </div>
+        ) : categoryView === "saved" ? (
+          <div className="dashboard-content">
+            <section className="feed-column">
+              <div className="section-heading">
+                <div><span className="eyebrow">YOUR READING LIST</span><h2>Saved Newsletters</h2></div>
+                <span className="story-count">{savedStories.length} saved</span>
+              </div>
+              {savedStories.length === 0 ? (
+                <div className="empty-state"><Bookmark size={28} /><h3>Nothing saved yet</h3><p>Tap the bookmark icon on any story to save it here.</p></div>
+              ) : (
+                <div className="story-grid">
+                  {savedStories.map((story) => (
+                    <StoryCard key={story.id} story={story} onOpen={setSelectedStory} saved onToggleSave={toggleSave} />
+                  ))}
+                </div>
+              )}
+            </section>
+          </div>
+        ) : categoryView !== "feed" ? (
           <CategoriesPanel mode={categoryView} onBack={() => setCategoryView("feed")} onCategorySelect={() => { setCategoryView("feed"); loadDashboardData(); }} />
         ) : (
           <div className="dashboard-content">
@@ -390,16 +497,16 @@ export default function Dashboard() {
                           key={story.id}
                           aria-hidden={!active}
                           aria-label={`${index + 1} of ${slideCount}`}
-                          style={{ backgroundImage: `linear-gradient(90deg, rgba(7, 15, 25, .88), rgba(7, 15, 25, .1)), linear-gradient(0deg, rgba(7, 15, 25, .6), transparent 70%)${story.image ? `, url("${story.image}")` : ""}` }}
+                          style={{ backgroundImage: `linear-gradient(90deg, rgba(0, 0, 0, .88), rgba(0, 0, 0, .1)), linear-gradient(0deg, rgba(0, 0, 0, .6), transparent 70%)${story.image ? `, url("${story.image}")` : ""}` }}
                         >
                           <div className="featured-content">
-                            <span className="featured-kicker"><Sparkles size={14} /> FEATURED STORY</span>
+                            {/* <span className="featured-kicker"><Sparkles size={14} /> FEATURED STORY</span> */}
                             <h1>{story.title}</h1>
                             <div className="featured-byline"><span className="author-avatar">E</span><span>{story.author}</span><span>·</span><span>{story.category}</span></div>
                             <p>{story.summary}</p>
                             <button type="button" tabIndex={active ? 0 : -1} className="read-featured-button" onClick={() => setSelectedStory(story)}>Read story <ChevronRight size={16} /></button>
                           </div>
-                          <button type="button" tabIndex={active ? 0 : -1} className={`featured-save icon-button${savedIds.includes(story.id) ? " is-saved" : ""}`} onClick={() => toggleSave(story.id)} aria-label="Bookmark featured story"><Bookmark size={18} fill={savedIds.includes(story.id) ? "currentColor" : "none"} /></button>
+                          <button type="button" tabIndex={active ? 0 : -1} className={`featured-save icon-button${savedIds.includes(story.id) ? " is-saved" : ""}`} onClick={() => toggleSave(story)} aria-label="Bookmark featured story"><Bookmark size={18} fill={savedIds.includes(story.id) ? "currentColor" : "none"} /></button>
                         </article>
                       );
                     })}
@@ -462,7 +569,7 @@ export default function Dashboard() {
           {selectedStory.image && <img className="reader-image" src={selectedStory.image} alt="" />}
           <div className="reader-body"><span className="eyebrow">{selectedStory.category}</span><h2 id="reader-title">{selectedStory.title}</h2><div className="reader-byline">{selectedStory.author} <span>·</span> {selectedStory.time}</div><p>{selectedStory.summary}</p>
             {selectedStory.link && <a className="reader-save-button" href={selectedStory.link} target="_blank" rel="noreferrer">Read original article <ChevronRight size={16} /></a>}
-            <button type="button" className="reader-save-button" onClick={() => toggleSave(selectedStory.id)}><Bookmark size={16} fill={savedIds.includes(selectedStory.id) ? "currentColor" : "none"} />{savedIds.includes(selectedStory.id) ? "Saved to reading list" : "Save to reading list"}</button>
+            <button type="button" className="reader-save-button" onClick={() => toggleSave(selectedStory)}><Bookmark size={16} fill={savedIds.includes(selectedStory.id) ? "currentColor" : "none"} />{savedIds.includes(selectedStory.id) ? "Saved to reading list" : "Save to reading list"}</button>
           </div>
         </section>
       </div>}

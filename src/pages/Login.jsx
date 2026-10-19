@@ -120,7 +120,7 @@ function Login() {
                     textAlign: "right",
                     cursor: loading || resetSent ? "not-allowed" : "pointer",
                     fontSize: "14px",
-                    color: loading || resetSent ? "#9ca3af" : "#4f46e5",
+                    color: loading || resetSent ? "#9ca3af" : "#ffffff",
                     pointerEvents: loading || resetSent ? "none" : "auto",
                   }}
                   onClick={!loading && !resetSent ? handleForgotPassword : undefined}
@@ -129,7 +129,7 @@ function Login() {
                 </p>
 
                 {error && <p className="error-message">{error}</p>}
-                {message && <p style={{ color: "green" }}>{message}</p>}
+                {message && <p style={{ color: "#ffffff" }}>{message}</p>}
 
                 <button type="submit" disabled={loading} className="submit-btn">
                   {loading ? <span className="loader"></span> : "Sign In"}
