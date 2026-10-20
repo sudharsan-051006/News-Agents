@@ -122,24 +122,16 @@
 .app-subbar::-webkit-scrollbar { display: none; }
 .app-subbar .feed-tabs { flex: 0 0 auto; }
 .subbar-chips { display: flex; align-items: center; gap: 8px; margin-left: auto; }
-
-/* Topic chips: soft filled pills with icons; the active one is solid accent */
 .chip {
-  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 7px;
-  height: 34px; padding: 0 14px; border: 1px solid transparent; border-radius: 999px;
-  background: rgba(255,255,255,.06); color: var(--ink-2);
-  font-size: 12.5px; font-weight: 500; text-transform: capitalize; white-space: nowrap;
-  transition: background .18s, color .18s, border-color .18s, transform .18s;
+  flex: 0 0 auto; height: 32px; padding: 0 14px; border: 1px solid var(--line); border-radius: 999px;
+  background: transparent; color: var(--muted); font-size: 12px; text-transform: capitalize; white-space: nowrap;
+  transition: all .18s;
 }
-.chip svg { color: var(--muted); transition: color .18s; }
-.chip:hover { background: rgba(255,255,255,.1); color: #fff; }
-.chip:active { transform: scale(.96); }
-.chip.active {
-  background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600;
-  box-shadow: 0 6px 18px -6px rgba(225,29,46,.7);
-}
-.chip.active svg { color: #fff; }
-
+/* Topic chips now carry an icon */
+.chip { display: inline-flex; align-items: center; gap: 6px; }
+.chip svg { flex: 0 0 auto; }
+.chip:hover { color: var(--ink); border-color: var(--line-2); }
+.chip.active { background: var(--accent-soft); border-color: rgba(225,29,46,.5); color: #ff7b85; font-weight: 600; }
 .app-subbar .category-topbar-label { font-size: 24px; }
 
 /* ---------- Mobile bottom dock ---------- */
@@ -167,35 +159,16 @@
   .nav-links, .nav-add-button, .nav-icon-button { display: none; }
   .nav-search { flex: 1 1 0; width: auto; min-width: 0; max-width: none; }
   .nav-search svg { flex: 0 0 auto; }
-  .nav-brand { flex: 0 0 auto; }
+  .nav-brand, .account-menu { flex: 0 0 auto; }
   .nav-search:focus-within { width: auto; }
   .nav-spacer { display: none; }
   .nav-brand { margin-right: 4px; }
-
-  /* Avatar goes to the right edge; popover anchors to the header so it never overflows */
-  .account-menu { position: static; flex: 0 0 auto; margin-left: auto; }
-  .account-popover {
-    top: calc(100% + 8px); right: 12px; left: auto;
-    width: min(290px, calc(100vw - 24px));
-    max-height: calc(100dvh - 90px); overflow-y: auto;
-  }
-
   .app-subbar { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 10px; min-height: 0; padding: 12px 16px 4px; border-top: 0; overflow: visible; }
   .app-subbar .feed-tabs { display: flex; width: 100%; }
   .app-subbar .feed-tab { flex: 1; justify-content: center; padding: 0 8px; }
-
-  /* One swipeable row of topics, bleeding to the screen edges */
-  .subbar-chips {
-    margin: 0 -16px; padding: 2px 16px 6px;
-    flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden;
-    scroll-snap-type: x proximity; scrollbar-width: none;
-    -webkit-overflow-scrolling: touch;
-    -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 16px, #000 calc(100% - 32px), transparent);
-            mask-image: linear-gradient(90deg, transparent 0, #000 16px, #000 calc(100% - 32px), transparent);
-  }
-  .subbar-chips::-webkit-scrollbar { display: none; }
-  .chip { height: 38px; scroll-snap-align: center; }
-
+  /* Show every topic: wrap onto extra rows instead of hiding them off-screen */
+  .subbar-chips { margin-left: 0; flex-wrap: wrap; overflow: visible; }
+  .chip { height: 36px; }
   .app-subbar .category-topbar-label { font-size: 22px; }
   .account-item-mobile { display: flex; }
 
@@ -222,6 +195,7 @@
 @media (max-width: 900px) {
   /* 16px inputs stop iOS from zooming the page on focus */
   .nav-search input, .news-dashboard .add-media-form input { font-size: 16px; }
+  .account-popover { width: min(290px, calc(100vw - 24px)); }
   .account-item { height: 46px; }
 
   /* Keep the "save sources" bar above the dock */
