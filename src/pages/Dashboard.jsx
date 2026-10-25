@@ -29,6 +29,26 @@ import { supabase } from "../supabaseClient";
 import CategoriesPanel from "./CategoriesPanel";
 import "../styles/Dashboard.css";
 import "../styles/DashboardNav.css";
+import "../styles/Pagination.css";
+
+// Number of story cards shown per page below the carousel.
+const PAGE_SIZE = 10;
+
+// Builds a compact page list like [1, "…", 4, 5, 6, "…", 12].
+function getPageList(current, total) {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  const pages = new Set([1, total, current, current - 1, current + 1]);
+  if (current <= 3) { pages.add(2); pages.add(3); pages.add(4); }
+  if (current >= total - 2) { pages.add(total - 1); pages.add(total - 2); pages.add(total - 3); }
+  const sorted = [...pages].filter((p) => p >= 1 && p <= total).sort((a, b) => a - b);
+  const list = [];
+  sorted.forEach((p, i) => {
+    if (i > 0 && p - sorted[i - 1] > 1) list.push("…");
+    list.push(p);
+  });
+  return list;
+}
+
 const TOPIC_ICONS = {
   "all topics": Layers,
   geopolitics: Globe2,
@@ -38,6 +58,10 @@ const TOPIC_ICONS = {
   tech: Cpu,
   technology: Cpu,
 };
+
+// Table used by the "Your Stories" feed. Change here if your table is named differently.
+const PRIVATE_NEWS_TABLE = "private_news_cache";
+
 function formatTime(value) {
   if (!value) return "Recently";
   const date = new Date(value);
@@ -49,6 +73,7 @@ function formatTime(value) {
   const days = Math.floor(hours / 24);
   return `${days} day${days === 1 ? "" : "s"} ago`;
 }
+
 function mapArticle(row, index) {
   let author = "News source";
   try {
@@ -68,6 +93,7 @@ function mapArticle(row, index) {
     link: row.link || "",
   };
 }
+
 async function loadPersonalizedTrends(userId) {
   const { data: follows, error: followsError } = await supabase
     .from("category_follows")
@@ -105,21 +131,21 @@ async function loadPersonalizedTrends(userId) {
 
     sourceRows = data || [];
   }
-const sourceByEvent = new Map();
+  const sourceByEvent = new Map();
 
-for (const source of sourceRows) {
-  const existing = sourceByEvent.get(source.event_id);
+  for (const source of sourceRows) {
+    const existing = sourceByEvent.get(source.event_id);
 
-  if (!existing) {
-    sourceByEvent.set(source.event_id, source);
-    continue;
+    if (!existing) {
+      sourceByEvent.set(source.event_id, source);
+      continue;
+    }
+
+    // Prefer an article with an image over one without an image.
+    if (!existing.image_url && source.image_url) {
+      sourceByEvent.set(source.event_id, source);
+    }
   }
-
-  // Prefer an article with an image over one without an image.
-  if (!existing.image_url && source.image_url) {
-    sourceByEvent.set(source.event_id, source);
-  }
-}
   const trends = (trendRows || []).map((trend) => {
     const source = sourceByEvent.get(trend.id);
     return {
@@ -140,6 +166,7 @@ for (const source of sourceRows) {
   });
   return { categories: categories || [], trends };
 }
+
 async function loadPublicCategoryStories() {
   const { data: categories, error: categoriesError } = await supabase
     .from("categories")
@@ -169,6 +196,7 @@ async function loadPublicCategoryStories() {
   const urls = [...sourceCategoryMap.keys()];
   if (!urls.length) return { categories: publicRows, stories: [] };
 
+  // Public stories ("Stories for You") come from the public news_cache table.
   const { data: rows, error: newsError } = await supabase
     .from("news_cache")
     .select("id,category,ai_headline,ai_summary,original_title,link,source,image_url,published_at,created_at")
@@ -232,6 +260,7 @@ function StoryCard({ story, onOpen, saved, onToggleSave }) {
     </article>
   );
 }
+
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState("Your Stories");
   const [categoryView, setCategoryView] = useState("feed");
@@ -270,6 +299,7 @@ export default function Dashboard() {
   const [passwordBusy, setPasswordBusy] = useState(false);
   const [passwordError, setPasswordError] = useState("");
   const [passwordSuccess, setPasswordSuccess] = useState("");
+
   // Close the account menu on outside click or Escape.
   useEffect(() => {
     if (!accountOpen) return undefined;
@@ -284,6 +314,7 @@ export default function Dashboard() {
       document.removeEventListener("keydown", onKeyDown);
     };
   }, [accountOpen]);
+
   // Lock page scroll behind any open dialog (important on phones).
   useEffect(() => {
     if (!(showAddMedia || showChangePassword || selectedStory)) return undefined;
@@ -291,6 +322,7 @@ export default function Dashboard() {
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = previous; };
   }, [showAddMedia, showChangePassword, selectedStory]);
+
   // ---------- Saved stories (stored in Supabase table `saved_stories`) ----------
   const loadSavedStories = useCallback(async () => {
     setSavedLoading(true);
@@ -322,10 +354,12 @@ export default function Dashboard() {
       setSavedLoading(false);
     }
   }, []);
+
   const savedIds = useMemo(
     () => savedStories.map((story) => String(story.id)),
     [savedStories]
   );
+
   const toggleSave = useCallback(
     async (story) => {
       const storyId = String(story.id);
@@ -370,6 +404,7 @@ export default function Dashboard() {
     },
     [savedStories, loadSavedStories]
   );
+
   useEffect(() => {
     loadSavedStories();
     // Reload when the user signs in or out.
@@ -378,6 +413,7 @@ export default function Dashboard() {
     });
     return () => listener?.subscription?.unsubscribe();
   }, [loadSavedStories]);
+
   // ---------- Dashboard feed ----------
   const loadDashboardData = useCallback(async () => {
     setLoadingStories(true);
@@ -414,10 +450,12 @@ export default function Dashboard() {
       const selectedUrls = [...new Set(chosenFeeds.map((feed) => feed.rss_url).filter(Boolean))];
       let articleRows = [];
       if (selectedUrls.length) {
+        // "Your Stories" reads from the private news cache table.
         const { data, error: articleError } = await supabase
-          .from("news_cache")
+          .from(PRIVATE_NEWS_TABLE)
           .select("id,category,ai_headline,ai_summary,original_title,link,source,image_url,published_at,created_at")
           .in("source", selectedUrls)
+          // .eq("user_id", user.id) // uncomment if the private table has a user_id column
           .order("published_at", { ascending: false, nullsFirst: false })
           .limit(60);
         if (articleError) throw articleError;
@@ -440,7 +478,9 @@ export default function Dashboard() {
       setLoadingStories(false);
     }
   }, []);
+
   useEffect(() => { loadDashboardData(); }, [loadDashboardData]);
+
   // Load journals (all RSS sources) from the database when the Journals view opens.
   useEffect(() => {
     if (categoryView !== "journals") return undefined;
@@ -464,6 +504,7 @@ export default function Dashboard() {
     })();
     return () => { cancelled = true; };
   }, [categoryView]);
+
   async function handleChangePassword(event) {
     event.preventDefault();
     setPasswordError("");
@@ -509,6 +550,7 @@ export default function Dashboard() {
       setPasswordBusy(false);
     }
   }
+
   const stories = useMemo(() => {
     let result;
     if (activeTab === "Trending Stories") result = [...trendsData];
@@ -531,7 +573,26 @@ export default function Dashboard() {
     }
     return result;
   }, [storiesData, publicStoriesData, trendsData, activeTab, activeTopic, search]);
+
   const featuredStories = useMemo(() => stories.slice(0, 5), [stories]);
+
+  // ---------- Pagination (10 cards per page) ----------
+  const [page, setPage] = useState(1);
+  const storiesTopRef = useRef(null);
+  const totalPages = Math.max(1, Math.ceil(stories.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pagedStories = useMemo(
+    () => stories.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
+    [stories, currentPage]
+  );
+  const pageList = useMemo(() => getPageList(currentPage, totalPages), [currentPage, totalPages]);
+  // Go back to page 1 whenever the tab, topic or search changes.
+  useEffect(() => { setPage(1); }, [activeTab, activeTopic, search]);
+  const goToPage = (next) => {
+    const target = Math.min(Math.max(1, next), totalPages);
+    setPage(target);
+    storiesTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
   const [slide, setSlide] = useState(0);
   const [carouselPaused, setCarouselPaused] = useState(false);
   const slideCount = featuredStories.length;
@@ -542,24 +603,27 @@ export default function Dashboard() {
     const timer = window.setInterval(() => setSlide((current) => (current + 1) % slideCount), 6000);
     return () => window.clearInterval(timer);
   }, [slideCount, carouselPaused]);
+
   const pickTopic = (topic) => {
     setCategoryView("feed");
     setActiveTopic(topic);
     // Topic filtering stays on the currently selected feed.
-
   };
+
   const openAddMedia = () => {
     setShowAddMedia(true);
     setMediaError("");
     setMediaSuccess("");
     setAccountOpen(false);
   };
+
   const openChangePassword = () => {
     setShowChangePassword(true);
     setPasswordError("");
     setPasswordSuccess("");
     setAccountOpen(false);
   };
+
   async function handleAddMedia(event) {
     event.preventDefault();
     setMediaError("");
@@ -651,6 +715,7 @@ export default function Dashboard() {
       setMediaBusy(false);
     }
   }
+
   async function handleLogout() {
     const { error } = await supabase.auth.signOut();
     if (error) {
@@ -660,6 +725,7 @@ export default function Dashboard() {
     }
     window.location.assign("/login");
   }
+
   const topbarLabels = {
     public: "Public Categories",
     manage: "Manage Categories",
@@ -674,6 +740,7 @@ export default function Dashboard() {
     { key: "public", label: "Public", icon: Globe2 },
     { key: "manage", label: "Manage", icon: FolderCog },
   ];
+
   return (
     <div className="news-dashboard">
       {/* ---------- Top navigation ---------- */}
@@ -944,9 +1011,21 @@ export default function Dashboard() {
               ) : (
                 <div className="featured-story featured-empty"><div className="featured-content"><span className="featured-kicker"><Sparkles size={14} /> YOUR DAILY BRIEFING</span><h1>{loadingStories ? "Loading your news..." : "Your next briefing starts here."}</h1><p>{loadingStories ? "Fetching articles from Supabase." : "Choose news sources in Public Categories, then come back here for your personalized feed."}</p>{!loadingStories && <button type="button" className="read-featured-button" onClick={() => setCategoryView("public")}>Explore Public Categories <ChevronRight size={16} /></button>}</div></div>
               )}
-              <div className="section-heading"><div><span className="eyebrow">CURATED FOR YOU</span><h2>{activeTopic === "All Topics" ? activeTab : activeTopic}</h2></div><span className="story-count">{stories.length} stories <ChevronRight size={15} /></span></div>
+              <div className="section-heading" ref={storiesTopRef}><div><span className="eyebrow">CURATED FOR YOU</span><h2>{activeTopic === "All Topics" ? activeTab : activeTopic}</h2></div><span className="story-count">{stories.length} stories <ChevronRight size={15} /></span></div>
               {loadingStories && <div className="empty-state"><p>Loading articles from Supabase...</p></div>}
-              <div className="story-grid">{stories.map((story) => <StoryCard key={story.id} story={story} onOpen={setSelectedStory} saved={savedIds.includes(String(story.id))} onToggleSave={toggleSave} />)}</div>
+              <div className="story-grid">{pagedStories.map((story) => <StoryCard key={story.id} story={story} onOpen={setSelectedStory} saved={savedIds.includes(String(story.id))} onToggleSave={toggleSave} />)}</div>
+              {totalPages > 1 && (
+                <nav className="pagination" aria-label="Story pages">
+                  <button type="button" className="page-btn page-nav" onClick={() => goToPage(currentPage - 1)} disabled={currentPage === 1} aria-label="Previous page"><ChevronLeft size={16} /> <span>Prev</span></button>
+                  <div className="page-numbers">
+                    {pageList.map((item, index) => item === "…"
+                      ? <span key={`gap-${index}`} className="page-gap" aria-hidden="true">…</span>
+                      : <button key={item} type="button" className={`page-btn${item === currentPage ? " active" : ""}`} onClick={() => goToPage(item)} aria-label={`Page ${item}`} aria-current={item === currentPage ? "page" : undefined}>{item}</button>)}
+                  </div>
+                  <button type="button" className="page-btn page-nav" onClick={() => goToPage(currentPage + 1)} disabled={currentPage === totalPages} aria-label="Next page"><span>Next</span> <ChevronRight size={16} /></button>
+                  <span className="page-summary">Showing {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, stories.length)} of {stories.length}</span>
+                </nav>
+              )}
               {!loadingStories && stories.length === 0 && <div className="empty-state"><Search size={28} /><h3>No articles found</h3><p>{search ? "Try another search or choose a different topic." : "No public or selected-source news is available yet."}</p><button type="button" onClick={() => { setSearch(""); setActiveTopic("All Topics"); }}>Clear filters</button></div>}
               <p className="data-notice"><Activity size={14} /> {feedMessage}</p>
             </section>

@@ -1,0 +1,69 @@
+/* Save as src/styles/Pagination.css */
+.pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 28px 0 8px;
+}
+
+.page-numbers {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.page-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 38px;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid rgba(128, 128, 128, 0.35);
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+
+.page-btn:hover:not(:disabled):not(.active) {
+  background: rgba(128, 128, 128, 0.14);
+}
+
+.page-btn.active {
+  background: var(--accent, #2563eb);
+  border-color: var(--accent, #2563eb);
+  color: #fff;
+  cursor: default;
+}
+
+.page-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.page-gap {
+  min-width: 20px;
+  text-align: center;
+  opacity: 0.6;
+}
+
+.page-summary {
+  flex-basis: 100%;
+  text-align: center;
+  font-size: 13px;
+  opacity: 0.65;
+}
+
+@media (max-width: 600px) {
+  .pagination { gap: 6px; }
+  .page-btn { min-width: 34px; height: 34px; padding: 0 9px; }
+  .page-nav span { display: none; } /* arrows only on small screens */
+}

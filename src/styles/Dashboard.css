@@ -888,3 +888,27 @@
 .story-image-wrapper .save-button.is-saved {
   color: #c0392b;
 }
+
+@media (max-width: 768px) {
+  .app-header-inner {
+    display: flex;
+    align-items: center;
+    width: 100%;
+  }
+ 
+  .nav-brand {
+    flex-shrink: 0;
+  }
+ 
+  /* Takes the free space so the right-hand group sits at the edge */
+  .nav-spacer {
+    display: block;
+    flex: 1 1 auto;
+  }
+ 
+  .account-menu {
+    margin-left: auto;
+    flex-shrink: 0;
+    order: 99; /* always last = far right */
+  }
+}
