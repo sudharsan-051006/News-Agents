@@ -957,7 +957,7 @@ export default function Dashboard() {
             </section>
           </div>
         ) : categoryView !== "feed" ? (
-          <CategoriesPanel mode={categoryView} onBack={() => setCategoryView("feed")} onCategorySelect={() => { setCategoryView("feed"); loadDashboardData(); }} />
+          <CategoriesPanel mode={categoryView} onBack={() => setCategoryView("feed")} onCategorySelect={() => { setCategoryView("feed"); loadDashboardData(); }} onVisibilityChange={loadDashboardData} />
         ) : (
           <div className="dashboard-content">
             <section className="feed-column">

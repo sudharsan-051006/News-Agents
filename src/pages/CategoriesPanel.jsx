@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft, Check, ExternalLink, FolderPlus, Globe2, Link2, LockKeyhole, Plus, RefreshCw, Trash2, X, Search } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, ExternalLink, FolderPlus, Globe2, Link2, LockKeyhole, Pencil, Plus, RefreshCw, Trash2, X, Search } from "lucide-react";
 import { supabase } from "../supabaseClient";
 import "../styles/CategoriesPanel.css";
+import "../styles/CategoryVisibility.css";
 
 function validateRss(url) {
   const endpoint = import.meta.env.VITE_RSS_VALIDATOR_URL;
@@ -19,7 +20,7 @@ function validateRss(url) {
   });
 }
 
-export default function CategoriesPanel({ mode = "manage", onBack, onCategorySelect }) {
+export default function CategoriesPanel({ mode = "manage", onBack, onCategorySelect, onVisibilityChange }) {
   const [user, setUser] = useState(null);
   const [categories, setCategories] = useState([]);
   const [publicCategories, setPublicCategories] = useState([]);
@@ -38,6 +39,12 @@ export default function CategoriesPanel({ mode = "manage", onBack, onCategorySel
   const [selectedRss, setSelectedRss] = useState([]);
   const [rssSearch, setRssSearch] = useState("");
   const [savingSelection, setSavingSelection] = useState(false);
+  // Visibility (private <-> public) editing.
+  const [visibilityBusyId, setVisibilityBusyId] = useState("");
+  // RSS link editing inside private categories.
+  const [editing, setEditing] = useState(null); // { categoryId, rssId }
+  const [editUrl, setEditUrl] = useState("");
+  const [editBusy, setEditBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true); setError("");
@@ -62,7 +69,7 @@ export default function CategoriesPanel({ mode = "manage", onBack, onCategorySel
       const ids = [...new Set([...owned, ...(pub || [])].map(c => c.id))];
       if (ids.length) {
         const [{ data: links, error: linksError }, { data: categorizedFeeds, error: feedsError }] = await Promise.all([
-          supabase.from("category_sources").select("category_id,rss_id,rss(id,name,rss_url,category)").in("category_id", ids),
+          supabase.from("category_sources").select("category_id,rss_id,rss(id,name,rss_url,category,category_id)").in("category_id", ids),
           // Compatibility fallback: older RSS rows may have category_id but no category_sources row yet.
           supabase.from("rss").select("id,name,rss_url,category,category_id").in("category_id", ids),
         ]);
@@ -157,11 +164,11 @@ export default function CategoriesPanel({ mode = "manage", onBack, onCategorySel
     try {
       const validation = await validateRss(url.href);
       if (!validation?.valid) throw new Error(validation?.message || "This URL is not a valid RSS or Atom feed.");
-      let { data: rss, error: rssLookupError } = await supabase.from("rss").select("id,name,rss_url,category").eq("rss_url", url.href).maybeSingle();
+      let { data: rss, error: rssLookupError } = await supabase.from("rss").select("id,name,rss_url,category,category_id").eq("rss_url", url.href).maybeSingle();
       if (rssLookupError) throw rssLookupError;
       if (!rss) {
         const cat = categories.find(c => c.id === selectedCategory);
-        const { data: created, error: rssInsertError } = await supabase.from("rss").insert({ name: sourceName.trim() || validation.feedTitle || url.hostname, category: cat?.name || "General", category_id: selectedCategory, rss_url: url.href }).select("id,name,rss_url,category").single();
+        const { data: created, error: rssInsertError } = await supabase.from("rss").insert({ name: sourceName.trim() || validation.feedTitle || url.hostname, category: cat?.name || "General", category_id: selectedCategory, rss_url: url.href }).select("id,name,rss_url,category,category_id").single();
         if (rssInsertError) throw rssInsertError;
         rss = created;
       }
@@ -204,6 +211,145 @@ export default function CategoriesPanel({ mode = "manage", onBack, onCategorySel
     setSuccess("RSS link removed from this category.");
   }
 
+  // ---------- Change a category between private and public (owner only) ----------
+  async function changeVisibility(category) {
+    if (!user || category.owner_id !== user.id) { setError("Only the owner can change this category."); return; }
+    const next = category.visibility === "public" ? "private" : "public";
+    if (next === "public" && !window.confirm(`Make “${category.name}” public? Everyone will be able to see this category and its RSS links.`)) return;
+    setError(""); setSuccess(""); setVisibilityBusyId(category.id);
+    try {
+      const { data: updated, error: updateError } = await supabase
+        .from("categories")
+        .update({ visibility: next })
+        .eq("id", category.id)
+        .eq("owner_id", user.id)
+        .select("id,visibility")
+        .maybeSingle();
+      if (updateError) throw updateError;
+      if (!updated) throw new Error("Could not update this category. Check your Supabase update policy on `categories`.");
+      setCategories(current => current.map(c => c.id === category.id ? { ...c, visibility: updated.visibility } : c));
+      // Links can only be edited while the category is private.
+      if (next === "public" && editing?.categoryId === category.id) setEditing(null);
+      setSuccess(next === "public" ? `“${category.name}” is now public.` : `“${category.name}” is now private.`);
+      if (onVisibilityChange) onVisibilityChange();
+    } catch (e) {
+      setError(e.message || "Could not change the category visibility.");
+    } finally {
+      setVisibilityBusyId("");
+    }
+  }
+
+  // ---------- Edit an RSS link inside a private category (owner only) ----------
+  function startEditSource(category, source) {
+    setError(""); setSuccess("");
+    setEditing({ categoryId: category.id, rssId: source.id });
+    setEditUrl(source.rss_url || "");
+  }
+
+  function cancelEditSource() {
+    setEditing(null);
+    setEditUrl("");
+  }
+
+  async function saveEditedSource(event, category, source) {
+    event.preventDefault(); setError(""); setSuccess("");
+    if (!user || category.owner_id !== user.id || category.visibility !== "private") {
+      setError("Only the owner can edit RSS links, and only in a private category.");
+      return;
+    }
+    let url;
+    try { url = new URL(editUrl.trim()); } catch { setError("Enter a valid RSS URL."); return; }
+    if (url.protocol !== "https:") { setError("Use an HTTPS RSS URL."); return; }
+    if (url.href === source.rss_url) { cancelEditSource(); return; }
+    setEditBusy(true);
+    try {
+      const validation = await validateRss(url.href);
+      if (!validation?.valid) throw new Error(validation?.message || "This URL is not a valid RSS or Atom feed.");
+
+      // Does a feed with the new URL already exist?
+      const { data: existing, error: lookupError } = await supabase
+        .from("rss").select("id,name,rss_url,category,category_id").eq("rss_url", url.href).maybeSingle();
+      if (lookupError) throw lookupError;
+
+      // Is the old feed row also used by other categories?
+      const { data: otherLinks, error: otherError } = await supabase
+        .from("category_sources").select("category_id").eq("rss_id", source.id).neq("category_id", category.id);
+      if (otherError) throw otherError;
+      const sharedElsewhere = (otherLinks || []).length > 0 || Boolean(source.category_id && source.category_id !== category.id);
+
+      let nextFeed;
+      if (!existing && !sharedElsewhere) {
+        // Only this category uses the feed row, so change its URL in place.
+        const { data: updated, error: updateError } = await supabase
+          .from("rss").update({ rss_url: url.href }).eq("id", source.id)
+          .select("id,name,rss_url,category,category_id").maybeSingle();
+        if (updateError) throw updateError;
+        if (!updated) throw new Error("Could not update this RSS link. Check your Supabase update policy on `rss`.");
+        nextFeed = updated;
+      } else {
+        // The feed row is shared (or the new URL already exists): give this category its own link
+        // instead of changing a row other categories depend on.
+        nextFeed = existing;
+        if (!nextFeed) {
+          const { data: created, error: insertError } = await supabase
+            .from("rss")
+            .insert({ name: source.name || validation.feedTitle || url.hostname, category: category.name, category_id: category.id, rss_url: url.href })
+            .select("id,name,rss_url,category,category_id").single();
+          if (insertError) throw insertError;
+          nextFeed = created;
+        }
+        const { data: newLink, error: newLinkLookupError } = await supabase
+          .from("category_sources").select("category_id").eq("category_id", category.id).eq("rss_id", nextFeed.id).maybeSingle();
+        if (newLinkLookupError) throw newLinkLookupError;
+        if (!newLink) {
+          const { error: linkInsertError } = await supabase.from("category_sources").insert({ category_id: category.id, rss_id: nextFeed.id });
+          if (linkInsertError) throw linkInsertError;
+        }
+        const { error: oldLinkError } = await supabase
+          .from("category_sources").delete().eq("category_id", category.id).eq("rss_id", source.id);
+        if (oldLinkError) throw oldLinkError;
+        // Stop the old feed row from re-appearing through the legacy category_id fallback.
+        if (source.category_id === category.id) {
+          const { error: detachError } = await supabase.from("rss").update({ category_id: null }).eq("id", source.id);
+          if (detachError) console.warn("Could not detach the old RSS row from this category:", detachError);
+        }
+      }
+
+      // Keep the user's personal selection in sync.
+      const replaced = nextFeed.id !== source.id;
+      const stillUsedByOwnCategory = categories.some(c => c.id !== category.id && (sources[c.id] || []).some(s => s.id === source.id));
+      const { data: alreadySelected, error: selectedLookupError } = await supabase
+        .from("user_sources").select("rss_id").eq("user_id", user.id).eq("rss_id", nextFeed.id).maybeSingle();
+      if (selectedLookupError) throw selectedLookupError;
+      if (!alreadySelected) {
+        const { error: selectedInsertError } = await supabase.from("user_sources").insert({ user_id: user.id, rss_id: nextFeed.id });
+        if (selectedInsertError) throw selectedInsertError;
+      }
+      if (replaced && !stillUsedByOwnCategory) {
+        const { error: selectedDeleteError } = await supabase.from("user_sources").delete().eq("user_id", user.id).eq("rss_id", source.id);
+        if (selectedDeleteError) throw selectedDeleteError;
+      }
+      setSelectedRss(current => {
+        const base = replaced && !stillUsedByOwnCategory ? current.filter(id => id !== source.id) : current;
+        return [...new Set([...base, nextFeed.id])];
+      });
+
+      setSources(current => ({
+        ...current,
+        [category.id]: (current[category.id] || [])
+          .filter(s => s.id !== source.id && s.id !== nextFeed.id)
+          .concat(nextFeed)
+          .sort((a, b) => (a.name || "").localeCompare(b.name || "")),
+      }));
+      cancelEditSource();
+      setSuccess(`Updated the RSS link for ${nextFeed.name || "this source"}. Run the news pipeline to collect articles from the new link.`);
+    } catch (e) {
+      setError(e.message || "Could not update this RSS link.");
+    } finally {
+      setEditBusy(false);
+    }
+  }
+
   return <section className="categories-panel">
     <header className="categories-panel-header">
       <div className="categories-heading-icon"><FolderPlus size={22}/></div>
@@ -222,9 +368,45 @@ export default function CategoriesPanel({ mode = "manage", onBack, onCategorySel
           <button className="category-primary-button" disabled={busy}><Plus size={16}/>{busy ? "Creating…" : "Create category"}</button>
         </form>
         <div className="category-manage-card"><div className="category-card-title"><div><span className="category-card-kicker">YOUR LIBRARY</span><h2>Your categories <span className="category-count-badge">{categories.length}</span></h2></div></div>
-          {!categories.length ? <div className="category-empty"><FolderPlus size={25}/><strong>No categories yet</strong><span>Create your first category to start organizing RSS feeds.</span></div> : <div className="owned-category-list">{categories.map(cat => <article className={`owned-category${selectedCategory === cat.id ? " selected" : ""}`} key={cat.id}>
-            <button type="button" className="owned-category-main" onClick={() => { setSelectedCategory(cat.id); setExpandedCategory(expandedCategory === cat.id ? "" : cat.id); }}><span className="category-folder-icon"><FolderPlus size={18}/></span><span className="owned-category-copy"><strong>{cat.name}</strong><small>{(sources[cat.id] || []).length} RSS links · {cat.description || "No description"}</small></span><span className={`visibility-chip ${cat.visibility === "public" ? "public" : "private"}`}>{cat.visibility === "public" ? <Globe2 size={12}/> : <LockKeyhole size={12}/>} {cat.visibility}</span></button>
-            {expandedCategory === cat.id && <div className="owned-category-expanded"><p>{cat.description || "No description provided."}</p><div className="category-source-list">{(sources[cat.id] || []).map(source => <div className="category-source-row" key={source.id}><Link2 size={14}/><span><strong>{source.name}</strong><small>{source.rss_url}</small></span><button type="button" title="Remove from category" onClick={() => removeSource(cat.id, source.id)}><X size={15}/></button></div>)}{!(sources[cat.id] || []).length && <small className="muted-note">No RSS links added yet.</small>}</div><button type="button" className="category-delete-button" onClick={() => deleteCategory(cat)}><Trash2 size={14}/> Delete category</button></div>}
+          {!categories.length ? <div className="category-empty"><FolderPlus size={25}/><strong>No categories yet</strong><span>Create your first category to start organizing RSS feeds.</span></div> : <div className="owned-category-list">{categories.map(cat => <article className={`oc-card${selectedCategory === cat.id ? " selected" : ""}${cat.visibility === "public" ? " is-public" : ""}`} key={cat.id}>
+            <div className="oc-head">
+              <button type="button" className="oc-main" aria-expanded={expandedCategory === cat.id} onClick={() => { setSelectedCategory(cat.id); setExpandedCategory(expandedCategory === cat.id ? "" : cat.id); }}>
+                <span className="oc-icon">{cat.visibility === "public" ? <Globe2 size={19}/> : <LockKeyhole size={19}/>}</span>
+                <span className="oc-text"><strong>{cat.name}</strong><small>{(sources[cat.id] || []).length} RSS link{(sources[cat.id] || []).length === 1 ? "" : "s"}{cat.description ? ` · ${cat.description}` : ""}</small></span>
+                <ChevronDown size={16} className="oc-chevron"/>
+              </button>
+              <label className={`oc-toggle${visibilityBusyId === cat.id ? " is-busy" : ""}`} title={cat.visibility === "public" ? "Public — turn off to make it private" : "Private — turn on to make it public"}>
+                <span className="oc-toggle-text">{visibilityBusyId === cat.id ? "Saving…" : cat.visibility === "public" ? "Public" : "Private"}</span>
+                <input type="checkbox" role="switch" checked={cat.visibility === "public"} disabled={visibilityBusyId === cat.id} onChange={() => changeVisibility(cat)} aria-label={`Make ${cat.name} public`}/>
+                <span className="oc-track"><span className="oc-thumb"/></span>
+              </label>
+            </div>
+            {expandedCategory === cat.id && <div className="oc-body">
+              {cat.description && <p className="oc-desc">{cat.description}</p>}
+              <div className="oc-note">{cat.visibility === "public" ? <Globe2 size={14}/> : <LockKeyhole size={14}/>}<span>{cat.visibility === "public" ? "Public — everyone can see this category. Switch to private to edit its RSS links." : "Private — only you can see this category and edit its RSS links."}</span></div>
+              <div className="oc-sources">{(sources[cat.id] || []).map(source => {
+                const isEditing = editing?.categoryId === cat.id && editing?.rssId === source.id;
+                if (isEditing) {
+                  return <form className="oc-source" key={source.id} onSubmit={e => saveEditedSource(e, cat, source)}>
+                    <Link2 size={14}/>
+                    <input className="oc-edit-input" type="url" value={editUrl} onChange={e => setEditUrl(e.target.value)} placeholder="https://example.com/feed.xml" aria-label={`New RSS link for ${source.name || "this source"}`} required autoFocus/>
+                    <div className="oc-source-actions">
+                      <button type="submit" className="oc-icon-btn ok" title="Verify and save link" disabled={editBusy}>{editBusy ? "…" : <Check size={16}/>}</button>
+                      <button type="button" className="oc-icon-btn" title="Cancel" onClick={cancelEditSource} disabled={editBusy}><X size={16}/></button>
+                    </div>
+                  </form>;
+                }
+                return <div className="oc-source" key={source.id}>
+                  <Link2 size={14}/>
+                  <span className="oc-source-copy"><strong>{source.name}</strong><small>{source.rss_url}</small></span>
+                  <div className="oc-source-actions">
+                    {cat.visibility === "private" && <button type="button" className="oc-icon-btn" title="Edit RSS link" onClick={() => startEditSource(cat, source)}><Pencil size={15}/></button>}
+                    <button type="button" className="oc-icon-btn danger" title="Remove from category" onClick={() => removeSource(cat.id, source.id)}><X size={16}/></button>
+                  </div>
+                </div>;
+              })}{!(sources[cat.id] || []).length && <div className="oc-empty">No RSS links added yet.</div>}</div>
+              <button type="button" className="oc-delete" onClick={() => deleteCategory(cat)}><Trash2 size={14}/> Delete category</button>
+            </div>}
           </article>)}</div>}
         </div>
         <form className="category-add-source-card" onSubmit={addSource}><span className="category-card-kicker"><Link2 size={15}/> ADD RSS LINK</span><h2>Add a link to a category</h2><p>Feeds are verified before they are saved. Existing feeds can be linked without changing their original category.</p>

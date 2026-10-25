@@ -1,0 +1,371 @@
+/* ---------- Owned category cards (Red & Black Theme) ---------- */
+.oc-card {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  background: #111111;
+  overflow: hidden;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.oc-card + .oc-card {
+  margin-top: 10px;
+}
+
+.oc-card:hover {
+  border-color: rgba(220, 38, 38, 0.5);
+}
+
+.oc-card.selected {
+  border-color: #dc2626;
+  background: #151010;
+}
+
+.oc-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+}
+
+.oc-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #f5f5f5;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.oc-main:focus-visible {
+  outline: 2px solid #ef4444;
+  outline-offset: 4px;
+  border-radius: 10px;
+}
+
+.oc-icon {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: rgba(220, 38, 38, 0.12);
+  color: #ef4444;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.oc-card.is-public .oc-icon {
+  background: rgba(220, 38, 38, 0.2);
+  color: #ff4d4d;
+}
+
+.oc-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.oc-text strong {
+  color: #f5f5f5;
+  font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.oc-text small {
+  color: #a3a3a3;
+  font-size: 12.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.oc-chevron {
+  flex-shrink: 0;
+  color: #a3a3a3;
+  transition: transform 0.2s ease;
+}
+
+.oc-main[aria-expanded="true"] .oc-chevron {
+  transform: rotate(180deg);
+}
+
+/* ---------- Private / Public Toggle ---------- */
+.oc-toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  cursor: pointer;
+  user-select: none;
+}
+
+.oc-toggle.is-busy {
+  cursor: progress;
+}
+
+.oc-toggle input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+}
+
+.oc-toggle-text {
+  min-width: 54px;
+  text-align: right;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #d4d4d4;
+}
+
+.oc-card.is-public .oc-toggle-text {
+  color: #ff4d4d;
+}
+
+.oc-track {
+  position: relative;
+  width: 44px;
+  height: 26px;
+  border-radius: 999px;
+  background: #404040;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  transition: background 0.2s ease, opacity 0.2s ease;
+}
+
+.oc-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  transition: transform 0.2s ease;
+}
+
+.oc-toggle input:checked ~ .oc-track {
+  background: #dc2626;
+  border-color: #ef4444;
+}
+
+.oc-toggle input:checked ~ .oc-track .oc-thumb {
+  transform: translateX(18px);
+}
+
+.oc-toggle input:focus-visible ~ .oc-track {
+  outline: 2px solid #ef4444;
+  outline-offset: 3px;
+}
+
+.oc-toggle input:disabled ~ .oc-track {
+  opacity: 0.5;
+}
+
+/* ---------- Expanded Body ---------- */
+.oc-body {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  background: #0b0b0b;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.oc-desc {
+  margin: 0;
+  color: #d4d4d4;
+  font-size: 13.5px;
+}
+
+.oc-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 12.5px;
+  color: #d4d4d4;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.oc-card.is-public .oc-note {
+  background: rgba(220, 38, 38, 0.1);
+  border-color: rgba(220, 38, 38, 0.2);
+  color: #ffb3b3;
+}
+
+/* ---------- Sources ---------- */
+.oc-sources {
+  display: grid;
+  gap: 8px;
+}
+
+.oc-source {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid #292929;
+  background: #141414;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.oc-source:hover {
+  border-color: rgba(220, 38, 38, 0.35);
+  background: #191111;
+}
+
+.oc-source > svg {
+  flex-shrink: 0;
+  color: #a3a3a3;
+}
+
+.oc-source-copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.oc-source-copy strong {
+  color: #f5f5f5;
+  font-size: 13.5px;
+}
+
+.oc-source-copy small {
+  color: #a3a3a3;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.oc-source-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+/* ---------- Icon Buttons ---------- */
+.oc-icon-btn {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #d4d4d4;
+  cursor: pointer;
+  opacity: 0.75;
+  transition: background 0.15s ease, opacity 0.15s ease, color 0.15s ease;
+}
+
+.oc-icon-btn:hover:not(:disabled) {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.oc-icon-btn.danger:hover:not(:disabled) {
+  color: #ff4d4d;
+  background: rgba(220, 38, 38, 0.15);
+}
+
+.oc-icon-btn.ok:hover:not(:disabled) {
+  color: #4ade80;
+  background: rgba(34, 197, 94, 0.12);
+}
+
+.oc-icon-btn:disabled {
+  cursor: progress;
+  opacity: 0.4;
+}
+
+/* ---------- Edit Input ---------- */
+.oc-edit-input {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid #404040;
+  background: #0b0b0b;
+  color: #f5f5f5;
+  font: inherit;
+  font-size: 13px;
+  transition: border-color 0.15s ease;
+}
+
+.oc-edit-input::placeholder {
+  color: #737373;
+}
+
+.oc-edit-input:focus {
+  outline: 2px solid #dc2626;
+  outline-offset: 1px;
+  border-color: #dc2626;
+}
+
+/* ---------- Empty State ---------- */
+.oc-empty {
+  color: #a3a3a3;
+  font-size: 13px;
+  padding: 4px 2px;
+}
+
+/* ---------- Delete Button ---------- */
+.oc-delete {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: 9px;
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  background: rgba(220, 38, 38, 0.06);
+  color: #ff4d4d;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.oc-delete:hover {
+  background: rgba(220, 38, 38, 0.16);
+  border-color: #ef4444;
+}
+
+/* ---------- Mobile Responsive ---------- */
+@media (max-width: 520px) {
+  .oc-head {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .oc-main {
+    flex-basis: 100%;
+  }
+
+  .oc-toggle {
+    width: 100%;
+    justify-content: space-between;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .oc-toggle-text {
+    text-align: left;
+  }
+}
