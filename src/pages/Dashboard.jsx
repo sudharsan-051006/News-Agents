@@ -59,7 +59,8 @@ const TOPIC_ICONS = {
   technology: Cpu,
 };
 
-// Table used by the "Your Stories" feed. Change here if your table is named differently.
+// Per-user table. "Your Stories" reads from this table AND from the shared news_cache table.
+// Change here if your private table is named differently.
 const PRIVATE_NEWS_TABLE = "private_news_cache";
 
 function formatTime(value) {
@@ -74,7 +75,7 @@ function formatTime(value) {
   return `${days} day${days === 1 ? "" : "s"} ago`;
 }
 
-function mapArticle(row, index) {
+function mapArticle(row, index, idPrefix = "") {
   let author = "News source";
   try {
     if (row.source) author = new URL(row.source).hostname.replace(/^www\./i, "");
@@ -82,7 +83,8 @@ function mapArticle(row, index) {
     // Keep the fallback author when a source value is not a URL.
   }
   return {
-    id: row.id ?? `${row.link || row.ai_headline || "article"}-${index}`,
+    id: row.id != null ? (idPrefix ? `${idPrefix}${row.id}` : row.id) : `${idPrefix}${row.link || row.ai_headline || "article"}-${index}`,
+    publishedAt: row.published_at || row.created_at || "",
     title: row.ai_headline || row.original_title || "Untitled story",
     category: row.category || "General",
     source: row.source || "News source",
@@ -94,25 +96,19 @@ function mapArticle(row, index) {
   };
 }
 
-async function loadPersonalizedTrends(userId) {
-  const { data: follows, error: followsError } = await supabase
-    .from("category_follows")
-    .select("category_id")
-    .eq("user_id", userId);
-  if (followsError) throw followsError;
-  const categoryIds = [...new Set((follows || []).map((row) => row.category_id))];
-  if (!categoryIds.length) return { categories: [], trends: [] };
-  const { data: categories, error: categoriesError } = await supabase
-    .from("categories")
-    .select("id,name")
-    .in("id", categoryIds);
-  if (categoriesError) throw categoriesError;
-  const categoryNames = [...new Set((categories || []).map((category) => category.name).filter(Boolean))];
-  if (!categoryNames.length) return { categories: categories || [], trends: [] };
+const NEWS_COLUMNS =
+  "id,category,ai_headline,ai_summary,original_title,link,source,image_url,published_at,created_at";
+
+function toTime(value) {
+  const n = Date.parse(value);
+  return Number.isNaN(n) ? 0 : n;
+}
+
+// "Trending Stories": common for everyone, not tied to the signed-in user.
+async function loadTrends() {
   const { data: trendRows, error: trendsError } = await supabase
     .from("trend_events")
     .select("id,title,category,first_seen,last_seen,article_count,publisher_count,news_score,trend_status,updated_at")
-    .in("category", categoryNames)
     .order("news_score", { ascending: false })
     .limit(60);
   if (trendsError) throw trendsError;
@@ -121,32 +117,25 @@ async function loadPersonalizedTrends(userId) {
   if (eventIds.length) {
     const { data, error } = await supabase
       .from("trend_sources")
-      .select(
-        "event_id,article_url,article_title,publisher,category,published_at,observed_at,image_url"
-      )
+      .select("event_id,article_url,article_title,publisher,category,published_at,observed_at,image_url")
       .in("event_id", eventIds)
       .order("published_at", { ascending: false });
-
     if (error) throw error;
-
     sourceRows = data || [];
   }
   const sourceByEvent = new Map();
-
   for (const source of sourceRows) {
     const existing = sourceByEvent.get(source.event_id);
-
     if (!existing) {
       sourceByEvent.set(source.event_id, source);
       continue;
     }
-
     // Prefer an article with an image over one without an image.
     if (!existing.image_url && source.image_url) {
       sourceByEvent.set(source.event_id, source);
     }
   }
-  const trends = (trendRows || []).map((trend) => {
+  return (trendRows || []).map((trend) => {
     const source = sourceByEvent.get(trend.id);
     return {
       id: trend.id,
@@ -164,43 +153,40 @@ async function loadPersonalizedTrends(userId) {
       trendStatus: trend.trend_status,
     };
   });
-  return { categories: categories || [], trends };
 }
 
-async function loadPublicCategoryStories() {
+// "Stories for You": the latest stories from the shared news_cache table. Everyone sees them.
+async function loadPublicStories() {
   const { data: categories, error: categoriesError } = await supabase
     .from("categories")
     .select("id,name,visibility")
     .eq("visibility", "public")
     .order("name", { ascending: true });
   if (categoriesError) throw categoriesError;
-
   const publicRows = categories || [];
-  const categoryIds = publicRows.map((category) => category.id);
-  if (!categoryIds.length) return { categories: [], stories: [] };
 
-  const { data: associations, error: associationError } = await supabase
-    .from("category_sources")
-    .select("rss!category_sources_rss_id_fkey(id,rss_url,category),categories!category_sources_category_id_fkey(id,name,visibility)")
-    .in("category_id", categoryIds);
-  if (associationError) throw associationError;
-
+  // Optional: label stories with the public category their source belongs to.
   const sourceCategoryMap = new Map();
-  for (const row of associations || []) {
-    const category = Array.isArray(row.categories) ? row.categories[0] : row.categories;
-    const rss = Array.isArray(row.rss) ? row.rss[0] : row.rss;
-    if (category?.visibility !== "public" || !rss?.rss_url) continue;
-    sourceCategoryMap.set(rss.rss_url, category.name || rss.category || "General");
+  if (publicRows.length) {
+    const { data: associations, error: associationError } = await supabase
+      .from("category_sources")
+      .select("rss!category_sources_rss_id_fkey(id,rss_url,category),categories!category_sources_category_id_fkey(id,name,visibility)")
+      .in("category_id", publicRows.map((category) => category.id));
+    if (associationError) {
+      console.warn("Could not load public category sources:", associationError);
+    } else {
+      for (const row of associations || []) {
+        const category = Array.isArray(row.categories) ? row.categories[0] : row.categories;
+        const rss = Array.isArray(row.rss) ? row.rss[0] : row.rss;
+        if (category?.visibility !== "public" || !rss?.rss_url) continue;
+        sourceCategoryMap.set(rss.rss_url, category.name || rss.category || "General");
+      }
+    }
   }
 
-  const urls = [...sourceCategoryMap.keys()];
-  if (!urls.length) return { categories: publicRows, stories: [] };
-
-  // Public stories ("Stories for You") come from the public news_cache table.
   const { data: rows, error: newsError } = await supabase
     .from("news_cache")
-    .select("id,category,ai_headline,ai_summary,original_title,link,source,image_url,published_at,created_at")
-    .in("source", urls)
+    .select(NEWS_COLUMNS)
     .order("published_at", { ascending: false, nullsFirst: false })
     .limit(100);
   if (newsError) throw newsError;
@@ -210,6 +196,53 @@ async function loadPublicCategoryStories() {
     category: sourceCategoryMap.get(row.source) || row.category || "General",
   }));
   return { categories: publicRows, stories };
+}
+
+// "Your Stories": news from the sources the user selected, read from BOTH
+// the private news cache and the shared news_cache tables.
+async function loadYourStories(userId) {
+  const [rssResult, sourceResult] = await Promise.all([
+    supabase.from("rss").select("id,name,category,rss_url"),
+    supabase.from("user_sources").select("rss_id").eq("user_id", userId),
+  ]);
+  if (rssResult.error) throw rssResult.error;
+  if (sourceResult.error) throw sourceResult.error;
+  const selectedIds = new Set((sourceResult.data || []).map((row) => row.rss_id));
+  const feeds = (rssResult.data || []).filter((row) => selectedIds.has(row.id));
+  const urls = [...new Set(feeds.map((feed) => feed.rss_url).filter(Boolean))];
+  if (!urls.length) return { feeds, stories: [] };
+
+  const [privateResult, sharedResult] = await Promise.all([
+    supabase
+      .from(PRIVATE_NEWS_TABLE)
+      .select(NEWS_COLUMNS)
+      .in("source", urls)
+      // .eq("user_id", userId) // uncomment if the private table has a user_id column
+      .order("published_at", { ascending: false, nullsFirst: false })
+      .limit(60),
+    supabase
+      .from("news_cache")
+      .select(NEWS_COLUMNS)
+      .in("source", urls)
+      .order("published_at", { ascending: false, nullsFirst: false })
+      .limit(60),
+  ]);
+  if (privateResult.error && sharedResult.error) throw sharedResult.error;
+  if (privateResult.error) console.warn(`Could not read ${PRIVATE_NEWS_TABLE}:`, privateResult.error);
+  if (sharedResult.error) console.warn("Could not read news_cache:", sharedResult.error);
+
+  const shared = (sharedResult.data || []).map((row, index) => mapArticle(row, index));
+  const seenLinks = new Set(shared.map((story) => story.link).filter(Boolean));
+  // Private rows get a prefixed id so they never clash with news_cache ids; a story that
+  // exists in both tables is shown once.
+  const own = (privateResult.data || [])
+    .map((row, index) => mapArticle(row, index, "private-"))
+    .filter((story) => !story.link || !seenLinks.has(story.link));
+
+  const stories = [...shared, ...own]
+    .sort((a, b) => toTime(b.publishedAt) - toTime(a.publishedAt))
+    .slice(0, 80);
+  return { feeds, stories };
 }
 
 function StoryCard({ story, onOpen, saved, onToggleSave }) {
@@ -279,7 +312,6 @@ export default function Dashboard() {
   const [storiesData, setStoriesData] = useState([]);
   const [publicCategories, setPublicCategories] = useState([]);
   const [publicStoriesData, setPublicStoriesData] = useState([]);
-  const [followedCategories, setFollowedCategories] = useState([]);
   const [trendsData, setTrendsData] = useState([]);
   const [loadingStories, setLoadingStories] = useState(true);
   const [feedMessage, setFeedMessage] = useState("Loading your personalized news...");
@@ -415,63 +447,64 @@ export default function Dashboard() {
   }, [loadSavedStories]);
 
   // ---------- Dashboard feed ----------
+  // Trending Stories and Stories for You are shared by everyone; only Your Stories needs a signed-in user.
   const loadDashboardData = useCallback(async () => {
     setLoadingStories(true);
     try {
-      const { data: authData, error: authError } = await supabase.auth.getUser();
-      if (authError) throw authError;
-      const user = authData?.user;
+      const { data: authData } = await supabase.auth.getUser();
+      const user = authData?.user || null;
       setUserEmail(user?.email || "Reader");
-      if (!user) {
-        setFeeds([]);
-        setStoriesData([]);
+
+      const [trendsResult, publicResult, yourResult] = await Promise.allSettled([
+        loadTrends(),
+        loadPublicStories(),
+        user ? loadYourStories(user.id) : Promise.resolve({ feeds: [], stories: [] }),
+      ]);
+
+      let failed = false;
+      if (trendsResult.status === "fulfilled") {
+        setTrendsData(trendsResult.value);
+      } else {
+        failed = true;
+        console.error("Failed to load trending stories:", trendsResult.reason);
+        setTrendsData([]);
+      }
+      if (publicResult.status === "fulfilled") {
+        setPublicCategories(publicResult.value.categories);
+        setPublicStoriesData(publicResult.value.stories);
+      } else {
+        failed = true;
+        console.error("Failed to load stories for you:", publicResult.reason);
         setPublicCategories([]);
         setPublicStoriesData([]);
-        setFollowedCategories([]);
-        setTrendsData([]);
-        setFeedMessage("Sign in to see your personalized news.");
-        return;
       }
-      const [rssResult, sourceResult, personalizedTrends, publicFeed] = await Promise.all([
-        supabase.from("rss").select("id,name,category,rss_url"),
-        supabase.from("user_sources").select("rss_id").eq("user_id", user.id),
-        loadPersonalizedTrends(user.id),
-        loadPublicCategoryStories(),
-      ]);
-      if (rssResult.error) throw rssResult.error;
-      if (sourceResult.error) throw sourceResult.error;
-      setFollowedCategories(personalizedTrends.categories);
-      setTrendsData(personalizedTrends.trends);
-      setPublicCategories(publicFeed.categories);
-      setPublicStoriesData(publicFeed.stories);
-      const selectedIds = new Set((sourceResult.data || []).map((row) => row.rss_id));
-      const chosenFeeds = (rssResult.data || []).filter((row) => selectedIds.has(row.id));
-      setFeeds(chosenFeeds);
-      const selectedUrls = [...new Set(chosenFeeds.map((feed) => feed.rss_url).filter(Boolean))];
-      let articleRows = [];
-      if (selectedUrls.length) {
-        // "Your Stories" reads from the private news cache table.
-        const { data, error: articleError } = await supabase
-          .from(PRIVATE_NEWS_TABLE)
-          .select("id,category,ai_headline,ai_summary,original_title,link,source,image_url,published_at,created_at")
-          .in("source", selectedUrls)
-          // .eq("user_id", user.id) // uncomment if the private table has a user_id column
-          .order("published_at", { ascending: false, nullsFirst: false })
-          .limit(60);
-        if (articleError) throw articleError;
-        articleRows = data || [];
+      if (yourResult.status === "fulfilled") {
+        setFeeds(yourResult.value.feeds);
+        setStoriesData(yourResult.value.stories);
+      } else {
+        failed = true;
+        console.error("Failed to load your stories:", yourResult.reason);
+        setFeeds([]);
+        setStoriesData([]);
       }
-      const mapped = articleRows.map(mapArticle);
-      setStoriesData(mapped);
-      setFeedMessage(mapped.length
-        ? `Loaded ${mapped.length} articles from ${chosenFeeds.length} selected sources.`
-        : "No articles found for this feed yet. Run the backend news pipeline first.");
+
+      if (failed) {
+        setFeedMessage("Some news could not be loaded. Check Supabase access policies and table columns.");
+      } else if (!user) {
+        setFeedMessage("Sign in to see stories from your own sources.");
+      } else {
+        const own = yourResult.value;
+        setFeedMessage(
+          own.stories.length
+            ? `Loaded ${own.stories.length} articles from ${own.feeds.length} selected sources.`
+            : "No articles found for your sources yet. Choose sources in Public Categories or run the backend news pipeline."
+        );
+      }
     } catch (error) {
       console.error("Failed to load dashboard news from Supabase:", error);
       setStoriesData([]);
       setPublicCategories([]);
       setPublicStoriesData([]);
-      setFollowedCategories([]);
       setTrendsData([]);
       setFeedMessage("Could not load news. Check Supabase access policies and table columns.");
     } finally {
