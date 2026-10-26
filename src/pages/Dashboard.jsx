@@ -198,17 +198,39 @@ async function loadPublicStories() {
   return { categories: publicRows, stories };
 }
 
-// "Your Stories": news from the sources the user selected, read from BOTH
-// the private news cache and the shared news_cache tables.
+// "Your Stories": news from the user's RSS sources, read from BOTH the private news cache
+// and the shared news_cache tables. The sources are:
+//   1. the RSS links in the user's own categories (category_sources / rss.category_id), and
+//   2. any extra sources the user picked (user_sources).
 async function loadYourStories(userId) {
-  const [rssResult, sourceResult] = await Promise.all([
-    supabase.from("rss").select("id,name,category,rss_url"),
+  const [rssResult, sourceResult, categoryResult] = await Promise.all([
+    supabase.from("rss").select("id,name,category,category_id,rss_url"),
     supabase.from("user_sources").select("rss_id").eq("user_id", userId),
+    supabase.from("categories").select("id").eq("owner_id", userId),
   ]);
   if (rssResult.error) throw rssResult.error;
   if (sourceResult.error) throw sourceResult.error;
-  const selectedIds = new Set((sourceResult.data || []).map((row) => row.rss_id));
-  const feeds = (rssResult.data || []).filter((row) => selectedIds.has(row.id));
+  if (categoryResult.error) throw categoryResult.error;
+
+  const rssIds = new Set((sourceResult.data || []).map((row) => row.rss_id));
+
+  // RSS link ids that belong to the user's own categories.
+  const categoryIds = (categoryResult.data || []).map((category) => category.id);
+  if (categoryIds.length) {
+    const { data: links, error: linksError } = await supabase
+      .from("category_sources")
+      .select("rss_id")
+      .in("category_id", categoryIds);
+    if (linksError) throw linksError;
+    (links || []).forEach((link) => rssIds.add(link.rss_id));
+    // Older feeds may only have rss.category_id and no category_sources row.
+    const ownCategorySet = new Set(categoryIds);
+    (rssResult.data || []).forEach((row) => {
+      if (row.category_id && ownCategorySet.has(row.category_id)) rssIds.add(row.id);
+    });
+  }
+
+  const feeds = (rssResult.data || []).filter((row) => rssIds.has(row.id));
   const urls = [...new Set(feeds.map((feed) => feed.rss_url).filter(Boolean))];
   if (!urls.length) return { feeds, stories: [] };
 
