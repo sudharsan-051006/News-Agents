@@ -26,6 +26,7 @@ import {
   Zap,
 } from "lucide-react";
 import { supabase } from "../supabaseClient";
+import { neonSql } from "../neonClient";
 import CategoriesPanel from "./CategoriesPanel";
 import "../styles/Dashboard.css";
 import "../styles/DashboardNav.css";
@@ -52,11 +53,26 @@ function getPageList(current, total) {
 const TOPIC_ICONS = {
   "all topics": Layers,
   geopolitics: Globe2,
+  "geopolitics & security": Globe2,
   local: MapPin,
   movies: Film,
+  entertainment: Film,
+  "entertainment & movies": Film,
   sports: Trophy,
   tech: Cpu,
   technology: Cpu,
+  "technology & ai": Cpu,
+  "finance & markets": TrendingUp,
+  finance: TrendingUp,
+  business: TrendingUp,
+  economy: TrendingUp,
+  "india affairs": MapPin,
+  india: MapPin,
+  global: Globe2,
+  crime: LockKeyhole,
+  politics: Globe2,
+  science: Sparkles,
+  "science & environment": Sparkles,
 };
 
 // Per-user table. "Your Stories" reads from this table AND from the shared news_cache table.
@@ -104,55 +120,124 @@ function toTime(value) {
   return Number.isNaN(n) ? 0 : n;
 }
 
-// "Trending Stories": common for everyone, not tied to the signed-in user.
+const PILLAR_DEFAULT_IMAGES = {
+  "Technology & AI": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1200&q=80",
+  "Technology": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1200&q=80",
+  "Geopolitics & Security": "https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?auto=format&fit=crop&w=1200&q=80",
+  "Geopolitics": "https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?auto=format&fit=crop&w=1200&q=80",
+  "India Affairs": "https://images.unsplash.com/photo-1532375810709-75b1da00537c?auto=format&fit=crop&w=1200&q=80",
+  "Finance & Markets": "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=1200&q=80",
+  "Business": "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=1200&q=80",
+  "Economy": "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=1200&q=80",
+  "Sports": "https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?auto=format&fit=crop&w=1200&q=80",
+  "Entertainment & Movies": "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=1200&q=80",
+  "Entertainment": "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=1200&q=80",
+  "Movies": "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=1200&q=80",
+  "Science & Environment": "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80",
+  "Crime": "https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&w=1200&q=80",
+  "Politics": "https://images.unsplash.com/photo-1541872703-74c5e44368f9?auto=format&fit=crop&w=1200&q=80",
+  "General News": "https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=1200&q=80",
+  "Global Trends": "https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?auto=format&fit=crop&w=1200&q=80",
+};
+
+function isGenericPlaceholder(url) {
+  if (!url) return true;
+  const lower = url.toLowerCase();
+  return (
+    lower.includes("googleusercontent.com") ||
+    lower.includes("news.google.com") ||
+    lower.includes("favicon") ||
+    lower.includes("default_logo")
+  );
+}
+
+// "Trending Stories": Powered independently by Neon Serverless PostgreSQL.
 async function loadTrends() {
-  const { data: trendRows, error: trendsError } = await supabase
-    .from("trend_events")
-    .select("id,title,category,first_seen,last_seen,article_count,publisher_count,news_score,trend_status,updated_at")
-    .order("news_score", { ascending: false })
-    .limit(60);
-  if (trendsError) throw trendsError;
-  const eventIds = (trendRows || []).map((trend) => trend.id);
-  let sourceRows = [];
-  if (eventIds.length) {
-    const { data, error } = await supabase
-      .from("trend_sources")
-      .select("event_id,article_url,article_title,publisher,category,published_at,observed_at,image_url")
-      .in("event_id", eventIds)
-      .order("published_at", { ascending: false });
-    if (error) throw error;
-    sourceRows = data || [];
+  if (!neonSql) {
+    console.warn("Neon SQL client not initialized. Check VITE_NEON_DATABASE_URL in .env");
+    return [];
   }
-  const sourceByEvent = new Map();
-  for (const source of sourceRows) {
-    const existing = sourceByEvent.get(source.event_id);
-    if (!existing) {
-      sourceByEvent.set(source.event_id, source);
-      continue;
-    }
-    // Prefer an article with an image over one without an image.
-    if (!existing.image_url && source.image_url) {
-      sourceByEvent.set(source.event_id, source);
-    }
+
+  try {
+    const rows = await neonSql`
+      SELECT 
+        t.id,
+        t.topic_name,
+        t.scope,
+        t.pillar,
+        t.why_trending,
+        t.keywords,
+        t.article_count,
+        t.trend_type,
+        t.velocity_score,
+        t.summary,
+        t.image_url as topic_image,
+        t.reference_articles,
+        t.created_at
+      FROM topic_snapshots t
+      WHERE jsonb_array_length(CASE WHEN jsonb_typeof(t.reference_articles::jsonb) = 'array' THEN t.reference_articles::jsonb ELSE '[]'::jsonb END) > 0
+      ORDER BY t.created_at DESC, t.velocity_score DESC
+      LIMIT 60;
+    `;
+
+    return (rows || [])
+      .map((trend) => {
+        // High-precision references: directly from the AI-validated topic snapshot
+        const rawRefs = Array.isArray(trend.reference_articles) ? trend.reference_articles : [];
+        const seenUrls = new Set();
+        const uniqueRefs = [];
+        for (const r of rawRefs) {
+          if (r && r.url && !seenUrls.has(r.url)) {
+            seenUrls.add(r.url);
+            uniqueRefs.push(r);
+          }
+        }
+
+        const primaryRef = uniqueRefs[0] || null;
+        const publisher = primaryRef?.source || (trend.scope === "INDIA" ? "India Intelligence" : "Global Intelligence");
+        let author = publisher;
+        try {
+          if (primaryRef?.url) author = new URL(primaryRef.url).hostname.replace(/^www\./i, "");
+        } catch {
+          // Fallback
+        }
+
+        // Proper macro domain category (never entity names like "Nasdaq")
+        let category = trend.pillar;
+        if (!category || category === "General News" || category === "General") {
+          category = trend.scope === "INDIA" ? "India Affairs" : "Global Trends";
+        }
+
+        // Best high-res image URL (rejecting generic google news placeholders)
+        const candidateImg = !isGenericPlaceholder(trend.topic_image) 
+          ? trend.topic_image 
+          : (!isGenericPlaceholder(primaryRef?.image_url) ? primaryRef.image_url : null);
+        const imageUrl = candidateImg || PILLAR_DEFAULT_IMAGES[category] || PILLAR_DEFAULT_IMAGES["General News"];
+
+        return {
+          id: `neon-trend-${trend.id}`,
+          title: trend.topic_name || primaryRef?.title || "Untitled trend",
+          category,
+          scope: trend.scope || "GLOBAL",
+          whyTrending: trend.why_trending || "",
+          source: publisher,
+          author,
+          time: formatTime(primaryRef?.published_at || trend.created_at),
+          image: imageUrl,
+          summary: trend.summary || `${trend.article_count || 1} articles tracked · Velocity ${Number(trend.velocity_score || 1).toFixed(1)}x`,
+          link: primaryRef?.url || "",
+          references: uniqueRefs,
+          articleCount: Math.max(uniqueRefs.length, trend.article_count || 1),
+          publisherCount: uniqueRefs.length > 0 ? new Set(uniqueRefs.map((r) => r.source).filter(Boolean)).size : 1,
+          newsScore: Number(trend.velocity_score) || 0,
+          trendStatus: trend.trend_type || "TRENDING",
+        };
+      })
+      .filter((trend) => trend.references && trend.references.length > 0);
+  } catch (error) {
+    console.error("Failed to load trending stories from Neon DB:", error);
+    return [];
   }
-  return (trendRows || []).map((trend) => {
-    const source = sourceByEvent.get(trend.id);
-    return {
-      id: trend.id,
-      title: trend.title || source?.article_title || "Untitled trend",
-      category: trend.category || "General",
-      source: source?.publisher || "Multiple news sources",
-      author: source?.publisher || "Multiple news sources",
-      time: formatTime(source?.published_at || trend.last_seen || trend.updated_at),
-      image: source?.image_url || "",
-      summary: `${trend.article_count} articles from ${trend.publisher_count} publishers.`,
-      link: source?.article_url || "",
-      articleCount: trend.article_count,
-      publisherCount: trend.publisher_count,
-      newsScore: Number(trend.news_score) || 0,
-      trendStatus: trend.trend_status,
-    };
-  });
 }
 
 // "Stories for You": the latest stories from the shared news_cache table. Everyone sees them.
@@ -268,6 +353,9 @@ async function loadYourStories(userId) {
 }
 
 function StoryCard({ story, onOpen, saved, onToggleSave }) {
+  const fallbackImage = PILLAR_DEFAULT_IMAGES[story.category] || PILLAR_DEFAULT_IMAGES["General News"];
+  const cardImage = story.image || fallbackImage;
+
   return (
     <article className="story-card">
       <div className="story-image-wrapper">
@@ -277,21 +365,17 @@ function StoryCard({ story, onOpen, saved, onToggleSave }) {
           onClick={() => onOpen(story)}
           aria-label={`Read ${story.title}`}
         >
-          {story.image ? (
-            <img
-              className="story-image"
-              src={story.image}
-              alt=""
-              loading="lazy"
-              onError={(event) => {
-                event.currentTarget.style.display = "none";
-              }}
-            />
-          ) : (
-            <span className="story-image story-image-placeholder">
-              <ImageIcon size={28} />
-            </span>
-          )}
+          <img
+            className="story-image"
+            src={cardImage}
+            alt=""
+            loading="lazy"
+            onError={(event) => {
+              if (event.currentTarget.src !== fallbackImage) {
+                event.currentTarget.src = fallbackImage;
+              }
+            }}
+          />
         </button>
         <button
           type="button"
@@ -353,6 +437,50 @@ export default function Dashboard() {
   const [passwordBusy, setPasswordBusy] = useState(false);
   const [passwordError, setPasswordError] = useState("");
   const [passwordSuccess, setPasswordSuccess] = useState("");
+
+  // Horizontal scroll handling for category chips
+  const chipsScrollRef = useRef(null);
+  const [canScrollChipsLeft, setCanScrollChipsLeft] = useState(false);
+  const [canScrollChipsRight, setCanScrollChipsRight] = useState(false);
+
+  const checkChipsScroll = useCallback(() => {
+    const el = chipsScrollRef.current;
+    if (el) {
+      const { scrollLeft, scrollWidth, clientWidth } = el;
+      setCanScrollChipsLeft(scrollLeft > 6);
+      setCanScrollChipsRight(scrollLeft < scrollWidth - clientWidth - 6);
+    }
+  }, []);
+
+  useEffect(() => {
+    checkChipsScroll();
+    const handleResize = () => checkChipsScroll();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [trendsData, publicCategories, activeTab, checkChipsScroll]);
+
+  // Enable mouse wheel horizontal scrolling over chips
+  useEffect(() => {
+    const el = chipsScrollRef.current;
+    if (!el) return undefined;
+    const onWheel = (e) => {
+      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+        e.preventDefault();
+        el.scrollLeft += e.deltaY;
+        checkChipsScroll();
+      }
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [checkChipsScroll]);
+
+  const handleChipsScroll = (direction) => {
+    if (chipsScrollRef.current) {
+      const offset = direction === "left" ? -280 : 280;
+      chipsScrollRef.current.scrollBy({ left: offset, behavior: "smooth" });
+      setTimeout(checkChipsScroll, 260);
+    }
+  };
 
   // Close the account menu on outside click or Escape.
   useEffect(() => {
@@ -895,25 +1023,61 @@ export default function Dashboard() {
                   </button>
                 ))}
               </nav>
-              <div className="subbar-chips" role="group" aria-label="Quick topic filters">
-                {["All Topics", ...publicCategories.map((category) => category.name)].filter((topic, index, topics) => topics.findIndex((item) => item.toLowerCase() === topic.toLowerCase()) === index).map((topic) => {
-                  const TopicIcon = TOPIC_ICONS[topic.toLowerCase()];
-                  return (
-                    <button
-                      key={topic}
-                      type="button"
-                      className={`chip${activeTopic === topic ? " active" : ""}`}
-                      aria-pressed={activeTopic === topic}
-                      onClick={(event) => {
-                        pickTopic(topic);
-                        event.currentTarget.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
-                      }}
-                    >
-                      {TopicIcon && <TopicIcon size={14} strokeWidth={2} />}
-                      {topic}
-                    </button>
-                  );
-                })}
+              <div className={`subbar-chips-wrapper${canScrollChipsLeft ? " can-scroll-left" : ""}${canScrollChipsRight ? " can-scroll-right" : ""}`}>
+                {canScrollChipsLeft && (
+                  <button
+                    type="button"
+                    className="chips-scroll-btn left"
+                    onClick={() => handleChipsScroll("left")}
+                    aria-label="Scroll topics left"
+                  >
+                    <ChevronLeft size={16} />
+                  </button>
+                )}
+                <div
+                  ref={chipsScrollRef}
+                  className="subbar-chips"
+                  role="group"
+                  aria-label="Quick topic filters"
+                  onScroll={checkChipsScroll}
+                >
+                  {(activeTab === "Trending Stories"
+                    ? ["All Topics", ...new Set(trendsData.map((t) => {
+                        let c = t.category || "";
+                        if (c === "Technology") return "Technology & AI";
+                        if (c === "Geopolitics") return "Geopolitics & Security";
+                        return c;
+                      }).filter(Boolean))]
+                    : ["All Topics", ...publicCategories.map((category) => category.name)]
+                  ).filter((topic, index, topics) => topics.findIndex((item) => item.toLowerCase() === topic.toLowerCase()) === index).map((topic) => {
+                    const TopicIcon = TOPIC_ICONS[topic.toLowerCase()];
+                    return (
+                      <button
+                        key={topic}
+                        type="button"
+                        className={`chip${activeTopic === topic ? " active" : ""}`}
+                        aria-pressed={activeTopic === topic}
+                        onClick={(event) => {
+                          pickTopic(topic);
+                          event.currentTarget.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+                        }}
+                      >
+                        {TopicIcon && <TopicIcon size={14} strokeWidth={2} />}
+                        {topic}
+                      </button>
+                    );
+                  })}
+                </div>
+                {canScrollChipsRight && (
+                  <button
+                    type="button"
+                    className="chips-scroll-btn right"
+                    onClick={() => handleChipsScroll("right")}
+                    aria-label="Scroll topics right"
+                  >
+                    <ChevronRight size={16} />
+                  </button>
+                )}
               </div>
             </>
           ) : (
@@ -1180,9 +1344,66 @@ export default function Dashboard() {
       {selectedStory && <div className="reader-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedStory(null); }}>
         <section className="article-reader" role="dialog" aria-modal="true" aria-labelledby="reader-title">
           <button type="button" className="reader-close icon-button" onClick={() => setSelectedStory(null)} aria-label="Close article"><X size={21} /></button>
-          {selectedStory.image && <img className="reader-image" src={selectedStory.image} alt="" />}
-          <div className="reader-body"><span className="eyebrow">{selectedStory.category}</span><h2 id="reader-title">{selectedStory.title}</h2><div className="reader-byline">{selectedStory.author} <span>·</span> {selectedStory.time}</div><p>{selectedStory.summary}</p>
-            {selectedStory.link && <a className="reader-save-button" href={selectedStory.link} target="_blank" rel="noreferrer">Read original article <ChevronRight size={16} /></a>}
+          <img
+            className="reader-image"
+            src={selectedStory.image || PILLAR_DEFAULT_IMAGES[selectedStory.category] || PILLAR_DEFAULT_IMAGES["General News"]}
+            alt=""
+            onError={(e) => {
+              const fallback = PILLAR_DEFAULT_IMAGES[selectedStory.category] || PILLAR_DEFAULT_IMAGES["General News"];
+              if (e.currentTarget.src !== fallback) e.currentTarget.src = fallback;
+            }}
+          />
+          <div className="reader-body">
+            <span className="eyebrow">{selectedStory.category}</span>
+            <h2 id="reader-title">{selectedStory.title}</h2>
+            <div className="reader-byline">{selectedStory.author} <span>·</span> {selectedStory.time}</div>
+            
+            {selectedStory.whyTrending && (
+              <div style={{ margin: "14px 0", padding: "12px 14px", borderRadius: "8px", background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#166534", fontSize: "14px", lineHeight: "1.5" }}>
+                <strong>⚡ Why It's Trending Today:</strong> {selectedStory.whyTrending}
+              </div>
+            )}
+
+            <p>{selectedStory.summary}</p>
+
+            {selectedStory.references && selectedStory.references.length > 0 && (
+              <div style={{ marginTop: "20px", marginBottom: "20px" }}>
+                <h4 style={{ fontSize: "13px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.5px", color: "#64748b", margin: "0 0 10px 0" }}>
+                  Referenced Sources & Coverage ({selectedStory.references.length})
+                </h4>
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  {selectedStory.references.map((ref, idx) => (
+                    <a
+                      key={idx}
+                      href={ref.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "10px 14px",
+                        background: "#f8fafc",
+                        borderRadius: "8px",
+                        border: "1px solid #e2e8f0",
+                        textDecoration: "none",
+                        color: "#0f172a",
+                        fontSize: "13px"
+                      }}
+                    >
+                      <span style={{ fontWeight: "500", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingRight: "10px" }}>
+                        {ref.title || ref.source}
+                      </span>
+                      <span style={{ fontSize: "11px", fontWeight: "600", color: "#2563eb", whiteSpace: "nowrap", background: "#eff6ff", padding: "2px 8px", borderRadius: "4px" }}>
+                        {ref.source || "Source"} ↗
+                      </span>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {selectedStory.link && <a className="reader-save-button" href={selectedStory.link} target="_blank" rel="noreferrer">Read primary article <ChevronRight size={16} /></a>}
             <button type="button" className="reader-save-button" onClick={() => toggleSave(selectedStory)}><Bookmark size={16} fill={savedIds.includes(String(selectedStory.id)) ? "currentColor" : "none"} />{savedIds.includes(String(selectedStory.id)) ? "Saved to reading list" : "Save to reading list"}</button>
           </div>
         </section>
