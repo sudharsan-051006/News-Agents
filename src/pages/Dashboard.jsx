@@ -1357,12 +1357,6 @@ export default function Dashboard() {
             <span className="eyebrow">{selectedStory.category}</span>
             <h2 id="reader-title">{selectedStory.title}</h2>
             <div className="reader-byline">{selectedStory.author} <span>·</span> {selectedStory.time}</div>
-            
-            {selectedStory.whyTrending && (
-              <div style={{ margin: "14px 0", padding: "12px 14px", borderRadius: "8px", background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#166534", fontSize: "14px", lineHeight: "1.5" }}>
-                <strong>⚡ Why It's Trending Today:</strong> {selectedStory.whyTrending}
-              </div>
-            )}
 
             <p>{selectedStory.summary}</p>
 
